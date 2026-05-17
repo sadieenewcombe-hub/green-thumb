@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 
 const plants = ref([])
 const selected = ref(null)
+const weather = ref(null)
 
 onMounted(async () => {
   const { data, error } = await supabase.from('plants').select('*')
@@ -11,10 +12,17 @@ onMounted(async () => {
     console.error('Error fetching plants:', error)
     return
   }
-  console.log('plants from supabase:', data)
   plants.value = data
   selected.value = data[0]
 })
+
+const fetchWeather = async () => {
+  const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=38.9072&longitude=-77.0369&current=temperature_2m,relative_humidity_2m,precipitation&temperature_unit=fahrenheit')
+  const data = await res.json()
+  weather.value = data.current
+}
+
+fetchWeather()
 
 const statusColor = (status) => {
   if (status === 'water') return 'bg-blue-500 text-blue-100'
@@ -41,9 +49,9 @@ const statusColor = (status) => {
 
     <!-- WEATHER STRIP -->
     <div class="bg-green-800 px-4 py-2 flex items-center gap-6 text-green-300 text-xs font-bold">
-      <span>☀️ 84°F today</span>
-      <span>💧 12% humidity</span>
-      <span>🌧 rain thu</span>
+      <span v-if="weather">☀️ {{ weather.temperature_2m }}°F today</span>
+      <span v-if="weather">💧 {{ weather.relative_humidity_2m }}% humidity</span>
+      <span v-if="weather">🌧 precipitation: {{ weather.precipitation }}mm</span>
       <span class="ml-auto bg-blue-500 text-blue-100 px-3 py-1 rounded-full text-xs">❄️ frost fri — bring plants in!</span>
     </div>
 
@@ -51,7 +59,7 @@ const statusColor = (status) => {
     <div class="flex flex-1">
 
       <!-- LEFT: PLANT DETAIL -->
-        <div v-if="selected" class="w-80 bg-green-700 p-4 flex flex-col gap-4">
+      <div v-if="selected" class="w-80 bg-green-700 p-4 flex flex-col gap-4">
 
         <!-- EMOJI -->
         <div class="bg-green-900 rounded-xl h-28 flex items-center justify-center text-6xl">
