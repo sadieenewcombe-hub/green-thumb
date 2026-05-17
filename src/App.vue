@@ -1,15 +1,20 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { supabase } from './supabase'
 
-const plants = [
-  { id: 1, name: 'Basil', species: 'Ocimum basilicum', location: 'Herb · patio', status: 'good', score: 9, emoji: '🌿' },
-  { id: 2, name: 'Rosemary', species: 'Salvia rosmarinus', location: 'Herb · patio', status: 'good', score: 8, emoji: '🌱' },
-  { id: 3, name: 'Lemon Thyme', species: 'Thymus citriodorus', location: 'Herb · patio', status: 'good', score: 8, emoji: '🌿' },
-  { id: 4, name: 'Jalapeño', species: 'Capsicum annuum', location: 'Pepper · patio', status: 'water', score: 7, emoji: '🌶️' },
-  { id: 5, name: 'Scallions', species: 'Allium fistulosum', location: 'Veggie · patio', status: 'good', score: 9, emoji: '🪴' },
-]
+const plants = ref([])
+const selected = ref(null)
 
-const selected = ref(plants[0])
+onMounted(async () => {
+  const { data, error } = await supabase.from('plants').select('*')
+  if (error) {
+    console.error('Error fetching plants:', error)
+    return
+  }
+  console.log('plants from supabase:', data)
+  plants.value = data
+  selected.value = data[0]
+})
 
 const statusColor = (status) => {
   if (status === 'water') return 'bg-blue-500 text-blue-100'
@@ -46,7 +51,7 @@ const statusColor = (status) => {
     <div class="flex flex-1">
 
       <!-- LEFT: PLANT DETAIL -->
-      <div class="w-80 bg-green-700 p-4 flex flex-col gap-4">
+        <div v-if="selected" class="w-80 bg-green-700 p-4 flex flex-col gap-4">
 
         <!-- EMOJI -->
         <div class="bg-green-900 rounded-xl h-28 flex items-center justify-center text-6xl">
