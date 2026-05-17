@@ -53,6 +53,43 @@ const statusColor = status => {
         <div>
           <h2 class="text-yellow-400 text-2xl font-bold">{{ selected.name }}</h2>
           <p class="text-green-400 text-xs uppercase tracking-widest mt-1">{{ selected.species }} · {{ selected.location }}</p>
+        <!-- STAT GRID -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-green-900 rounded-lg p-2">
+            <p class="text-green-500 text-xs uppercase tracking-wide">Last watered</p>
+            <p class="text-yellow-400 text-sm font-bold">5 days ago</p>
+          </div>
+          <div class="bg-green-900 rounded-lg p-2">
+            <p class="text-green-500 text-xs uppercase tracking-wide">Next water</p>
+            <p class="text-red-400 text-sm font-bold">Today!</p>
+          </div>
+        </div>
+
+        <!-- HEALTH BARS -->
+        <div class="flex flex-col gap-2">
+          <p class="text-green-500 text-xs uppercase tracking-wide">Plant health</p>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">💧</span>
+            <div class="flex-1 bg-green-900 rounded-full h-2">
+              <div class="bg-blue-400 h-2 rounded-full" style="width:15%"></div>
+            </div>
+            <span class="text-green-400 text-xs">15%</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">☀️</span>
+            <div class="flex-1 bg-green-900 rounded-full h-2">
+              <div class="bg-yellow-400 h-2 rounded-full" style="width:90%"></div>
+            </div>
+            <span class="text-green-400 text-xs">90%</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">❤️</span>
+            <div class="flex-1 bg-green-900 rounded-full h-2">
+              <div class="bg-red-400 h-2 rounded-full" style="width:70%"></div>
+            </div>
+            <span class="text-green-400 text-xs">70%</span>
+          </div>
+        </div>
         </div>
       </div>
 
