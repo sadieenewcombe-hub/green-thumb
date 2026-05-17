@@ -10,6 +10,13 @@ const newName = ref('')
 const newSpecies = ref('')
 const newLocation = ref('')
 
+const chatOpen = ref(false)
+const chatMessages = ref([
+  { role: 'assistant', content: 'Hi! Ask me anything about your plants, or upload a photo for a diagnosis.' }
+])
+const chatInput = ref('')
+const chatLoading = ref(false)
+
 onMounted(async () => {
   const { data, error } = await supabase.from('plants').select('*')
   if (error) {
@@ -42,6 +49,35 @@ const addPlant = async () => {
   newSpecies.value = ''
   newLocation.value = ''
   showForm.value = false
+}
+const sendMessage = async () => {
+  if (!chatInput.value.trim()) return
+  
+  const userMessage = chatInput.value
+  chatMessages.value.push({ role: 'user', content: userMessage })
+  chatInput.value = ''
+  chatLoading.value = true
+
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: chatMessages.value.filter(m => m.role === 'user' || m.role === 'assistant'),
+        plantName: selected.value?.name,
+        plantSpecies: selected.value?.species,
+        plantLocation: selected.value?.location
+      })
+    })
+
+    const data = await response.json()
+    chatMessages.value.push({ role: 'assistant', content: data.content[0].text })
+  } catch (error) {
+    console.error('Chat error:', error)
+    chatMessages.value.push({ role: 'assistant', content: 'Sorry, something went wrong. Try again!' })
+  } finally {
+    chatLoading.value = false
+  }
 }
 
 const statusColor = (status) => {
@@ -139,7 +175,42 @@ const statusColor = (status) => {
         <button class="bg-yellow-400 text-green-900 text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer hover:bg-yellow-300">
           📷 upload photo for scan
         </button>
+        <!-- CHAT TOGGLE BUTTON -->
+        <button @click="chatOpen = !chatOpen"
+          class="bg-green-900 text-green-300 text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer hover:bg-green-800">
+          🐛 ask wormy
+        </button>
 
+        <!-- CHAT PANEL -->
+        <div v-if="chatOpen" class="flex flex-col gap-2">
+          <div class="bg-green-900 rounded-lg p-3 flex flex-col gap-2 h-48 overflow-y-auto">
+            <div v-for="(msg, index) in chatMessages" :key="index"
+              :class="msg.role === 'user' ? 'text-right' : 'text-left'">
+              <span
+                :class="msg.role === 'user'
+                  ? 'bg-yellow-400 text-green-900 text-xs px-2 py-1 rounded-lg inline-block max-w-xs'
+                  : 'bg-green-700 text-green-100 text-xs px-2 py-1 rounded-lg inline-block max-w-xs'">
+                {{ msg.content }}
+              </span>
+            </div>
+            <div v-if="chatLoading" class="text-left">
+              <span class="bg-green-700 text-green-400 text-xs px-2 py-1 rounded-lg inline-block">
+                Wormy is thinking...
+              </span>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <input v-model="chatInput"
+              @keyup.enter="sendMessage"
+              type="text"
+              placeholder="Ask about your plant..."
+              class="flex-1 px-3 py-2 text-xs border border-green-600 rounded-lg bg-green-900 text-green-100" />
+            <button @click="sendMessage"
+              class="bg-yellow-400 text-green-900 text-xs font-bold px-3 py-2 rounded-lg cursor-pointer hover:bg-yellow-300">
+              Send
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- RIGHT: ROSTER LIST -->
