@@ -1,6 +1,4 @@
 <script setup>
-
-
 import { ref } from 'vue'
 
 const plants = [
@@ -12,15 +10,15 @@ const plants = [
 ]
 
 const selected = ref(plants[0])
-const statusColor = status => {
-  switch (status) {
-    case 'water': return 'bg-blue-500 text-blue-100'
-    case 'repot': return 'bg-orange-500 text-orange-100'
-    case 'frost': return 'bg-sky-400 text-sky-100'
-    default: return 'bg-green-600 text-green-100'
-  }
+
+const statusColor = (status) => {
+  if (status === 'water') return 'bg-blue-500 text-blue-100'
+  if (status === 'repot') return 'bg-orange-500 text-orange-100'
+  if (status === 'frost') return 'bg-sky-400 text-sky-100'
+  return 'bg-green-600 text-green-100'
 }
 </script>
+
 <template>
   <div class="bg-green-900 min-h-screen flex flex-col">
 
@@ -35,6 +33,7 @@ const statusColor = status => {
         <button class="bg-yellow-400 border-2 border-yellow-600 text-green-900 text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide">Garden</button>
       </div>
     </div>
+
     <!-- WEATHER STRIP -->
     <div class="bg-green-800 px-4 py-2 flex items-center gap-6 text-green-300 text-xs font-bold">
       <span>☀️ 84°F today</span>
@@ -42,17 +41,24 @@ const statusColor = status => {
       <span>🌧 rain thu</span>
       <span class="ml-auto bg-blue-500 text-blue-100 px-3 py-1 rounded-full text-xs">❄️ frost fri — bring plants in!</span>
     </div>
+
     <!-- MAIN BODY -->
     <div class="flex flex-1">
 
       <!-- LEFT: PLANT DETAIL -->
-      <div class="w-80 bg-green-700 p-4 flex flex-col gap-3">
+      <div class="w-80 bg-green-700 p-4 flex flex-col gap-4">
+
+        <!-- EMOJI -->
         <div class="bg-green-900 rounded-xl h-28 flex items-center justify-center text-6xl">
           {{ selected.emoji }}
         </div>
+
+        <!-- NAME + SPECIES -->
         <div>
           <h2 class="text-yellow-400 text-2xl font-bold">{{ selected.name }}</h2>
           <p class="text-green-400 text-xs uppercase tracking-widest mt-1">{{ selected.species }} · {{ selected.location }}</p>
+        </div>
+
         <!-- STAT GRID -->
         <div class="grid grid-cols-2 gap-2">
           <div class="bg-green-900 rounded-lg p-2">
@@ -73,24 +79,34 @@ const statusColor = status => {
             <div class="flex-1 bg-green-900 rounded-full h-2">
               <div class="bg-blue-400 h-2 rounded-full" style="width:15%"></div>
             </div>
-            <span class="text-green-400 text-xs">15%</span>
+            <span class="text-green-400 text-xs w-8 text-right">15%</span>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-sm">☀️</span>
             <div class="flex-1 bg-green-900 rounded-full h-2">
               <div class="bg-yellow-400 h-2 rounded-full" style="width:90%"></div>
             </div>
-            <span class="text-green-400 text-xs">90%</span>
+            <span class="text-green-400 text-xs w-8 text-right">90%</span>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-sm">❤️</span>
             <div class="flex-1 bg-green-900 rounded-full h-2">
               <div class="bg-red-400 h-2 rounded-full" style="width:70%"></div>
             </div>
-            <span class="text-green-400 text-xs">70%</span>
+            <span class="text-green-400 text-xs w-8 text-right">70%</span>
           </div>
         </div>
-        </div>
+
+        <!-- LAST SCAN -->
+        <p class="text-green-500 text-xs font-bold uppercase tracking-wide">
+          last scan: 7/10 · 2 days ago
+        </p>
+
+        <!-- UPLOAD BUTTON -->
+        <button class="bg-yellow-400 text-green-900 text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer hover:bg-yellow-300">
+          📷 upload photo for scan
+        </button>
+
       </div>
 
       <!-- RIGHT: ROSTER LIST -->
