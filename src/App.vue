@@ -5,6 +5,10 @@ import { supabase } from './supabase'
 const plants = ref([])
 const selected = ref(null)
 const weather = ref(null)
+const showForm = ref(false)
+const newName = ref('')
+const newSpecies = ref('')
+const newLocation = ref('')
 
 onMounted(async () => {
   const { data, error } = await supabase.from('plants').select('*')
@@ -23,6 +27,22 @@ const fetchWeather = async () => {
 }
 
 fetchWeather()
+
+const addPlant = async () => {
+  const { data, error } = await supabase
+    .from('plants')
+    .insert([{ name: newName.value, species: newSpecies.value, location: newLocation.value, status: 'good', score: 8, emoji: '🌱' }])
+    .select()
+  if (error) {
+    console.error('Error adding plant:', error)
+    return
+  }
+  plants.value.push(data[0])
+  newName.value = ''
+  newSpecies.value = ''
+  newLocation.value = ''
+  showForm.value = false
+}
 
 const statusColor = (status) => {
   if (status === 'water') return 'bg-blue-500 text-blue-100'
@@ -145,9 +165,33 @@ const statusColor = (status) => {
           </div>
           <p class="text-right font-bold text-amber-900">{{ plant.score }}/10</p>
         </div>
-        <div class="mt-auto p-4 text-center text-xs font-bold text-amber-600 uppercase tracking-widest border-t-2 border-dashed border-amber-300 bg-amber-100 cursor-pointer hover:bg-amber-200">
+
+        <div @click="showForm = true"
+          class="mt-auto p-4 text-center text-xs font-bold text-amber-600 uppercase tracking-widest border-t-2 border-dashed border-amber-300 bg-amber-100 cursor-pointer hover:bg-amber-200">
           + add a plant
         </div>
+
+        <!-- ADD PLANT FORM -->
+        <div v-if="showForm" class="p-4 bg-amber-100 border-t-2 border-amber-200">
+          <p class="text-xs font-bold text-amber-800 uppercase tracking-widest mb-3">New plant</p>
+          <input v-model="newName" type="text" placeholder="Name (e.g. Basil)"
+            class="w-full mb-2 px-3 py-2 text-sm border border-amber-300 rounded-lg bg-white text-amber-900" />
+          <input v-model="newSpecies" type="text" placeholder="Species (e.g. Ocimum basilicum)"
+            class="w-full mb-2 px-3 py-2 text-sm border border-amber-300 rounded-lg bg-white text-amber-900" />
+          <input v-model="newLocation" type="text" placeholder="Location (e.g. Herb · patio)"
+            class="w-full mb-3 px-3 py-2 text-sm border border-amber-300 rounded-lg bg-white text-amber-900" />
+          <div class="flex gap-2">
+            <button @click="addPlant"
+              class="flex-1 bg-green-700 text-green-100 text-xs font-bold uppercase py-2 rounded-lg cursor-pointer hover:bg-green-600">
+              Save
+            </button>
+            <button @click="showForm = false"
+              class="flex-1 bg-amber-200 text-amber-800 text-xs font-bold uppercase py-2 rounded-lg cursor-pointer hover:bg-amber-300">
+              Cancel
+            </button>
+          </div>
+        </div>
+
       </div>
 
     </div>
