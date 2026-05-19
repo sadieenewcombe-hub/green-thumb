@@ -9,6 +9,8 @@ const showForm = ref(false)
 const newName = ref('')
 const newSpecies = ref('')
 const newLocation = ref('')
+const currentView = ref('roster')
+const modalOpen = ref(false)
 
 const chatOpen = ref(false)
 const chatMessages = ref([
@@ -79,7 +81,7 @@ const sendMessage = async () => {
 }
 
 const statusColor = (status) => {
-  if (status === 'water') return 'text-white' 
+  if (status === 'water') return 'text-white'
   if (status === 'repot') return 'text-white'
   if (status === 'frost') return 'text-white'
   return 'text-white'
@@ -102,9 +104,26 @@ const statusBg = (status) => {
         <h1 class="text-3xl" style="font-family: 'BlobSpongey', cursive; color: #F0C040">Green Thumb</h1>
         <p class="text-xs tracking-widest uppercase" style="color: #D4A870">my garden</p>
       </div>
+
+      <!-- WORMY IN HEADER -->
+      <div class="flex flex-col items-center">
+        <div class="text-xs font-bold px-3 py-1 rounded-xl mb-1" style="background: #F5EED8; color: #8B5E2A">
+          psst... jalapeño is thirsty! 👀
+        </div>
+        <div class="text-4xl" style="cursor: pointer" @click="chatOpen = !chatOpen">🐛</div>
+      </div>
+
       <div class="flex gap-3">
-        <button class="border-2 text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide" style="border-color: #6AAE5A; color: #6AAE5A">Roster</button>
-        <button class="text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide" style="background: #F0C040; color: #8B5E2A">Garden</button>
+        <button @click="currentView = 'roster'"
+          class="text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide"
+          :style="currentView === 'roster'
+            ? 'background: #F0C040; color: #8B5E2A'
+            : 'border: 2px solid #6AAE5A; color: #6AAE5A'">Roster</button>
+        <button @click="currentView = 'garden'"
+          class="text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide"
+          :style="currentView === 'garden'
+            ? 'background: #F0C040; color: #8B5E2A'
+            : 'border: 2px solid #6AAE5A; color: #6AAE5A'">Garden</button>
       </div>
     </div>
 
@@ -116,24 +135,21 @@ const statusBg = (status) => {
       <span class="ml-auto px-3 py-1 rounded-full text-xs text-white" style="background: #5AA8D4">❄️ frost fri — bring plants in!</span>
     </div>
 
-    <!-- MAIN BODY -->
-    <div class="flex flex-1">
+    <!-- ROSTER VIEW -->
+    <div v-if="currentView === 'roster'" class="flex flex-1">
 
       <!-- LEFT: PLANT DETAIL -->
       <div v-if="selected" class="w-80 p-4 flex flex-col gap-4" style="background: #5A8A48">
 
-        <!-- EMOJI -->
         <div class="rounded-xl h-28 flex items-center justify-center text-6xl" style="background: #3A6A2A">
           {{ selected.emoji }}
         </div>
 
-        <!-- NAME + SPECIES -->
         <div class="text-center">
           <h2 class="text-2xl font-bold" style="color: #F0C040">{{ selected.name }}</h2>
           <p class="text-xs uppercase tracking-widest mt-1" style="color: #C8E8A0">{{ selected.species }} · {{ selected.location }}</p>
         </div>
 
-        <!-- STAT GRID -->
         <div class="grid grid-cols-2 gap-2">
           <div class="rounded-lg p-2" style="background: #3A6A2A">
             <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Last watered</p>
@@ -145,7 +161,6 @@ const statusBg = (status) => {
           </div>
         </div>
 
-        <!-- HEALTH BARS -->
         <div class="flex flex-col gap-2">
           <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Plant health</p>
           <div class="flex items-center gap-2">
@@ -171,23 +186,19 @@ const statusBg = (status) => {
           </div>
         </div>
 
-        <!-- LAST SCAN -->
         <p class="text-xs font-bold uppercase tracking-wide" style="color: #8AC870">
           last scan: 7/10 · 2 days ago
         </p>
 
-        <!-- UPLOAD BUTTON -->
         <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #F0C040; color: #8B5E2A">
           📷 upload photo for scan
         </button>
 
-        <!-- CHAT TOGGLE BUTTON -->
         <button @click="chatOpen = !chatOpen"
           class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #E87EA0; color: white">
           🐛 ask wormy
         </button>
 
-        <!-- CHAT PANEL -->
         <div v-if="chatOpen" class="flex flex-col gap-2">
           <div class="rounded-lg p-3 flex flex-col gap-2 h-48 overflow-y-auto" style="background: #3A6A2A">
             <div v-for="(msg, index) in chatMessages" :key="index"
@@ -255,7 +266,6 @@ const statusBg = (status) => {
           + add a plant
         </div>
 
-        <!-- ADD PLANT FORM -->
         <div v-if="showForm" class="p-4 border-t-2" style="background: #EDE5C5; border-color: #D4C8A0">
           <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color: #8B5E2A">New plant</p>
           <input v-model="newName" type="text" placeholder="Name (e.g. Basil)"
@@ -275,9 +285,99 @@ const statusBg = (status) => {
             </button>
           </div>
         </div>
-
       </div>
-
     </div>
+
+    <!-- GARDEN VIEW -->
+    <div v-if="currentView === 'garden'" class="flex-1 p-6" style="background: #5A8A48">
+      <div class="grid grid-cols-4 gap-4">
+        <div v-for="plant in plants" :key="plant.id"
+          @click="selected = plant; modalOpen = true"
+          class="rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+          style="background: #3A6A2A">
+          <div class="text-5xl">{{ plant.emoji }}</div>
+          <p class="text-sm font-bold text-center" style="color: #F0C040">{{ plant.name }}</p>
+          <span class="text-xs font-bold px-2 py-1 rounded-full text-white"
+            :style="{ background: statusBg(plant.status) }">
+            {{ plant.status }}
+          </span>
+          <div class="w-full flex flex-col gap-1">
+            <div class="w-full rounded-full h-1" style="background: #2A5A1A">
+              <div class="h-1 rounded-full" style="width:15%; background: #5AA8D4"></div>
+            </div>
+            <div class="w-full rounded-full h-1" style="background: #2A5A1A">
+              <div class="h-1 rounded-full" style="width:90%; background: #F0C040"></div>
+            </div>
+            <div class="w-full rounded-full h-1" style="background: #2A5A1A">
+              <div class="h-1 rounded-full" style="width:70%; background: #E87EA0"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EMPTY SLOTS -->
+        <div v-for="n in Math.max(0, 8 - plants.length)" :key="'empty-' + n"
+          class="rounded-xl p-4 flex items-center justify-center cursor-pointer"
+          style="background: #3A6A2A; opacity: 0.4; min-height: 160px">
+          <span style="color: #8AC870; font-size: 24px">+</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL -->
+    <div v-if="modalOpen && selected"
+      class="fixed inset-0 flex items-center justify-center z-50"
+      style="background: rgba(0,0,0,0.6)"
+      @click.self="modalOpen = false">
+      <div class="rounded-2xl p-6 flex flex-col gap-4 w-80" style="background: #5A8A48">
+        <div class="flex justify-between items-start">
+          <div class="text-5xl">{{ selected.emoji }}</div>
+          <button @click="modalOpen = false" class="text-xs font-bold px-3 py-1 rounded-full" style="background: #3A6A2A; color: #8AC870">✕ close</button>
+        </div>
+        <div class="text-center">
+          <h2 class="text-2xl font-bold" style="color: #F0C040">{{ selected.name }}</h2>
+          <p class="text-xs uppercase tracking-widest mt-1" style="color: #C8E8A0">{{ selected.species }} · {{ selected.location }}</p>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-lg p-2" style="background: #3A6A2A">
+            <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Last watered</p>
+            <p class="text-sm font-bold" style="color: #F0C040">5 days ago</p>
+          </div>
+          <div class="rounded-lg p-2" style="background: #3A6A2A">
+            <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Next water</p>
+            <p class="text-sm font-bold" style="color: #E87070">Today!</p>
+          </div>
+        </div>
+        <div class="flex flex-col gap-2">
+          <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Plant health</p>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">💧</span>
+            <div class="flex-1 rounded-full h-2" style="background: #3A6A2A">
+              <div class="h-2 rounded-full" style="width:15%; background: #5AA8D4"></div>
+            </div>
+            <span class="text-xs w-8 text-right" style="color: #C8E8A0">15%</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">☀️</span>
+            <div class="flex-1 rounded-full h-2" style="background: #3A6A2A">
+              <div class="h-2 rounded-full" style="width:90%; background: #F0C040"></div>
+            </div>
+            <span class="text-xs w-8 text-right" style="color: #C8E8A0">90%</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">❤️</span>
+            <div class="flex-1 rounded-full h-2" style="background: #3A6A2A">
+              <div class="h-2 rounded-full" style="width:70%; background: #E87EA0"></div>
+            </div>
+            <span class="text-xs w-8 text-right" style="color: #C8E8A0">70%</span>
+          </div>
+        </div>
+        <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer"
+          style="background: #E87EA0; color: white"
+          @click="modalOpen = false; chatOpen = true; currentView = 'roster'">
+          🐛 ask wormy
+        </button>
+      </div>
+    </div>
+
   </div>
 </template>
