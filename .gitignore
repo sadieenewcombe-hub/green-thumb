@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 seed-species.js
 seed-species-targeted.js
+enrich-species.js
