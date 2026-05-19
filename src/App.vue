@@ -9,6 +9,9 @@ const showForm = ref(false)
 const newName = ref('')
 const newSpecies = ref('')
 const newLocation = ref('')
+const speciesSearch = ref('')
+const speciesSuggestions = ref([])
+const showSuggestions = ref(false)
 const currentView = ref('roster')
 const modalOpen = ref(false)
 
@@ -78,6 +81,30 @@ const sendMessage = async () => {
   } finally {
     chatLoading.value = false
   }
+}
+
+const searchSpecies = async (query) => {
+  if (query.length < 2) {
+    speciesSuggestions.value = []
+    showSuggestions.value = false
+    return
+  }
+  const { data, error } = await supabase
+    .from('species')
+    .select('*')
+    .ilike('common_name', `%${query}%`)
+    .limit(5)
+  if (!error) {
+    speciesSuggestions.value = data
+    showSuggestions.value = data.length > 0
+  }
+}
+
+const selectSpecies = (species) => {
+  newName.value = species.common_name
+  newSpecies.value = species.scientific_name || ''
+  speciesSearch.value = species.common_name
+  showSuggestions.value = false
 }
 
 const statusColor = (status) => {
@@ -268,10 +295,32 @@ const statusBg = (status) => {
 
         <div v-if="showForm" class="p-4 border-t-2" style="background: #EDE5C5; border-color: #D4C8A0">
           <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color: #8B5E2A">New plant</p>
-          <input v-model="newName" type="text" placeholder="Name (e.g. Basil)"
-            class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
-          <input v-model="newSpecies" type="text" placeholder="Species (e.g. Ocimum basilicum)"
-            class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
+
+<!-- SPECIES SEARCH -->
+<div class="relative mb-2">
+  <input
+    v-model="speciesSearch"
+    @input="searchSpecies(speciesSearch)"
+    type="text"
+    placeholder="Search for a plant..."
+    class="w-full px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
+  <div v-if="showSuggestions"
+    class="absolute w-full rounded-lg shadow-lg z-10 mt-1 overflow-hidden"
+    style="background: white; border: 1px solid #D4C8A0">
+    <div v-for="suggestion in speciesSuggestions" :key="suggestion.id"
+      @click="selectSpecies(suggestion)"
+      class="px-3 py-2 cursor-pointer text-sm hover:bg-amber-50"
+      style="color: #3A2A0A; border-bottom: 1px solid #F5EED8">
+      <p class="font-bold">{{ suggestion.common_name }}</p>
+      <p class="text-xs" style="color: #8B6A3A">{{ suggestion.scientific_name }}</p>
+    </div>
+  </div>
+</div>
+
+<input v-model="newName" type="text" placeholder="Name"
+  class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
+<input v-model="newSpecies" type="text" placeholder="Species"
+  class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
           <input v-model="newLocation" type="text" placeholder="Location (e.g. Herb · patio)"
             class="w-full mb-3 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
           <div class="flex gap-2">
