@@ -12,6 +12,7 @@ const newLocation = ref('')
 const speciesSearch = ref('')
 const speciesSuggestions = ref([])
 const showSuggestions = ref(false)
+const selectedSpeciesData = ref(null)
 const currentView = ref('roster')
 const modalOpen = ref(false)
 
@@ -43,7 +44,16 @@ fetchWeather()
 const addPlant = async () => {
   const { data, error } = await supabase
     .from('plants')
-    .insert([{ name: newName.value, species: newSpecies.value, location: newLocation.value, status: 'good', score: 8, emoji: '🌱' }])
+    .insert([{ 
+  name: newName.value, 
+  species: newSpecies.value, 
+  location: newLocation.value, 
+  status: 'good', 
+  score: 8, 
+  emoji: '🌱',
+  water_frequency_days: selectedSpeciesData.value?.water_frequency_days || null,
+  sunlight: selectedSpeciesData.value?.sunlight || null
+}])
     .select()
   if (error) {
     console.error('Error adding plant:', error)
@@ -105,6 +115,7 @@ const selectSpecies = (species) => {
   newSpecies.value = species.scientific_name || ''
   speciesSearch.value = species.common_name
   showSuggestions.value = false
+  selectedSpeciesData.value = species
 }
 
 const statusColor = (status) => {
