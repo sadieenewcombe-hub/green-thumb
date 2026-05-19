@@ -50,14 +50,13 @@ const addPlant = async () => {
   newLocation.value = ''
   showForm.value = false
 }
+
 const sendMessage = async () => {
   if (!chatInput.value.trim()) return
-  
   const userMessage = chatInput.value
   chatMessages.value.push({ role: 'user', content: userMessage })
   chatInput.value = ''
   chatLoading.value = true
-
   try {
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -69,7 +68,6 @@ const sendMessage = async () => {
         plantLocation: selected.value?.location
       })
     })
-
     const data = await response.json()
     chatMessages.value.push({ role: 'assistant', content: data.content[0].text })
   } catch (error) {
@@ -89,12 +87,12 @@ const statusColor = (status) => {
 </script>
 
 <template>
-  <div class="bg-green-900 min-h-screen flex flex-col">
+  <div class="bg-green-900 min-h-screen flex flex-col" style="font-family: 'Rumpelstiltskin', cursive">
 
     <!-- HEADER -->
     <div class="bg-green-900 border-b-4 border-yellow-400 px-4 py-3 flex items-center justify-between">
       <div>
-        <h1 class="text-yellow-400 text-3xl font-bold">Green Thumb</h1>
+        <h1 class="text-yellow-400 text-3xl" style="font-family: 'BlobSpongey', cursive">Green Thumb</h1>
         <p class="text-green-400 text-xs tracking-widest uppercase">my garden</p>
       </div>
       <div class="flex gap-3">
@@ -123,10 +121,10 @@ const statusColor = (status) => {
         </div>
 
         <!-- NAME + SPECIES -->
-        <div>
-          <h2 class="text-yellow-400 text-2xl font-bold">{{ selected.name }}</h2>
-          <p class="text-green-400 text-xs uppercase tracking-widest mt-1">{{ selected.species }} · {{ selected.location }}</p>
-        </div>
+        <div class="text-center">
+  <h2 class="text-yellow-400 text-2xl font-bold">{{ selected.name }}</h2>
+  <p class="text-green-400 text-xs uppercase tracking-widest mt-1">{{ selected.species }} · {{ selected.location }}</p>
+</div>
 
         <!-- STAT GRID -->
         <div class="grid grid-cols-2 gap-2">
@@ -175,6 +173,7 @@ const statusColor = (status) => {
         <button class="bg-yellow-400 text-green-900 text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer hover:bg-yellow-300">
           📷 upload photo for scan
         </button>
+
         <!-- CHAT TOGGLE BUTTON -->
         <button @click="chatOpen = !chatOpen"
           class="bg-green-900 text-green-300 text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer hover:bg-green-800">

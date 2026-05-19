@@ -1,1 +1,27 @@
 @import "tailwindcss";
+
+@font-face {
+  font-family: 'BlobSpongey';
+  src: url('./assets/fonts/BlobSpongeyLowercase-wKq3.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Rumpelstiltskin';
+  src: url('./assets/fonts/Rumpelstiltskin-EPdj.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@theme {
+  --font-blob: 'BlobSpongey', cursive;
+  --font-rump: 'Rumpelstiltskin', cursive;
+}
+
+.font-blob {
+  font-family: 'BlobSpongey', cursive;
+}
+
+.font-rump {
+  font-family: 'Rumpelstiltskin', cursive;
+}
