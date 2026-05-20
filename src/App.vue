@@ -120,6 +120,39 @@ const selectSpecies = (species) => {
   selectedSpeciesData.value = species
 }
 
+const logWatering = async () => {
+  const today = new Date().toISOString().split('T')[0]
+
+  const { error: eventError } = await supabase
+    .from('care_events')
+    .insert([{
+      plant_id: selected.value.id,
+      type: 'watering',
+      date: today
+    }])
+
+  if (eventError) {
+    console.error('Error logging watering:', eventError)
+    return
+  }
+
+  const { error: updateError } = await supabase
+    .from('plants')
+    .update({ last_watered: today })
+    .eq('id', selected.value.id)
+
+  if (updateError) {
+    console.error('Error updating last watered:', updateError)
+    return
+  }
+
+  selected.value.last_watered = today
+  const plant = plants.value.find(p => p.id === selected.value.id)
+  if (plant) plant.last_watered = today
+
+  console.log('Watering logged!')
+}
+
 const statusColor = (status) => {
   if (status === 'water') return 'text-white'
   if (status === 'repot') return 'text-white'
@@ -235,6 +268,11 @@ const statusBg = (status) => {
         <p class="text-xs font-bold uppercase tracking-wide" style="color: #8AC870">
           last scan: 7/10 · 2 days ago
         </p>
+
+        <button @click="logWatering"
+  class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #5AA8D4; color: white">
+  💧 log watering
+</button>
 
         <!-- UPLOAD BUTTON -->
         <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #F0C040; color: #8B5E2A">
