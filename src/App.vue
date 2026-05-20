@@ -160,6 +160,13 @@ const waterHealth = (plant) => {
   return percent
 }
 
+const computedStatus = (plant) => {
+  if (!plant.last_watered || !plant.water_frequency_days) return plant.status
+  const health = waterHealth(plant)
+  if (health === 0) return 'water'
+  return 'good'
+}
+
 const statusColor = (status) => {
   if (status === 'water') return 'text-white'
   if (status === 'repot') return 'text-white'
@@ -348,8 +355,8 @@ const statusBg = (status) => {
           </div>
           <div class="flex justify-center">
             <span class="text-xs font-bold px-2 py-1 rounded-full uppercase text-white"
-              :style="{ background: statusBg(plant.status) }">
-              {{ plant.status }}
+              :style="{ background: statusBg(computedStatus(plant)) }">
+              {{ computedStatus(plant) }}
             </span>
           </div>
           <p class="text-right font-bold" style="color: #3A2A0A">{{ plant.score }}/10</p>
@@ -415,8 +422,8 @@ const statusBg = (status) => {
           <div class="text-5xl">{{ plant.emoji }}</div>
           <p class="text-sm font-bold text-center" style="color: #F0C040">{{ plant.name }}</p>
           <span class="text-xs font-bold px-2 py-1 rounded-full text-white"
-            :style="{ background: statusBg(plant.status) }">
-            {{ plant.status }}
+            :style="{ background: statusBg(computedStatus(plant)) }">
+              {{ computedStatus(plant) }}
           </span>
           <div class="w-full flex flex-col gap-1">
             <div class="w-full rounded-full h-1" style="background: #2A5A1A">
