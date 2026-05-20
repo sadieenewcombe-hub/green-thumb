@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { supabase } from './supabase'
 
 const plants = ref([])
@@ -15,7 +15,12 @@ const showSuggestions = ref(false)
 const selectedSpeciesData = ref(null)
 const currentView = ref('roster')
 const modalOpen = ref(false)
-
+const wormyMessage = computed(() => {
+  const thirsty = plants.value.filter(p => computedStatus(p) === 'water')
+  if (thirsty.length === 0) return 'all plants are happy! 🌱'
+  if (thirsty.length === 1) return `psst... ${thirsty[0].name} is thirsty! 💧`
+  return `${thirsty.length} plants need water! 💧`
+})
 const chatOpen = ref(false)
 const chatMessages = ref([
   { role: 'assistant', content: 'Hi! Ask me anything about your plants, or upload a photo for a diagnosis.' }
@@ -195,7 +200,7 @@ const statusBg = (status) => {
       <!-- WORMY IN HEADER -->
       <div class="flex flex-col items-center">
         <div class="text-xs font-bold px-3 py-1 rounded-xl mb-1" style="background: #F5EED8; color: #8B5E2A">
-          psst... jalapeño is thirsty! 👀
+          {{ wormyMessage }}
         </div>
         <div class="text-4xl" style="cursor: pointer" @click="chatOpen = !chatOpen">🐛</div>
       </div>
