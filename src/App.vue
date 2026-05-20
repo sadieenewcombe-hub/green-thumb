@@ -44,16 +44,16 @@ fetchWeather()
 const addPlant = async () => {
   const { data, error } = await supabase
     .from('plants')
-    .insert([{ 
-  name: newName.value, 
-  species: newSpecies.value, 
-  location: newLocation.value, 
-  status: 'good', 
-  score: 8, 
-  emoji: '🌱',
-  water_frequency_days: selectedSpeciesData.value?.water_frequency_days || null,
-  sunlight: selectedSpeciesData.value?.sunlight || null
-}])
+    .insert([{
+      name: newName.value,
+      species: newSpecies.value,
+      location: newLocation.value,
+      status: 'good',
+      score: 8,
+      emoji: '🌱',
+      water_frequency_days: selectedSpeciesData.value?.water_frequency_days || null,
+      sunlight: selectedSpeciesData.value?.sunlight || null
+    }])
     .select()
   if (error) {
     console.error('Error adding plant:', error)
@@ -63,6 +63,8 @@ const addPlant = async () => {
   newName.value = ''
   newSpecies.value = ''
   newLocation.value = ''
+  speciesSearch.value = ''
+  selectedSpeciesData.value = null
   showForm.value = false
 }
 
@@ -179,26 +181,31 @@ const statusBg = (status) => {
       <!-- LEFT: PLANT DETAIL -->
       <div v-if="selected" class="w-80 p-4 flex flex-col gap-4" style="background: #5A8A48">
 
+        <!-- EMOJI -->
         <div class="rounded-xl h-28 flex items-center justify-center text-6xl" style="background: #3A6A2A">
           {{ selected.emoji }}
         </div>
 
+        <!-- NAME + SPECIES + SUNLIGHT -->
         <div class="text-center">
           <h2 class="text-2xl font-bold" style="color: #F0C040">{{ selected.name }}</h2>
           <p class="text-xs uppercase tracking-widest mt-1" style="color: #C8E8A0">{{ selected.species }} · {{ selected.location }}</p>
+          <p class="text-sm font-bold uppercase mt-2" style="color: #C8E8A0">☀️ {{ selected.sunlight || 'sunlight unknown' }}</p>
         </div>
 
+        <!-- STAT GRID -->
         <div class="grid grid-cols-2 gap-2">
           <div class="rounded-lg p-2" style="background: #3A6A2A">
             <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Last watered</p>
-            <p class="text-sm font-bold" style="color: #F0C040">5 days ago</p>
+            <p class="text-sm font-bold" style="color: #F0C040">{{ selected.last_watered ? selected.last_watered : 'not logged' }}</p>
           </div>
           <div class="rounded-lg p-2" style="background: #3A6A2A">
-            <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Next water</p>
-            <p class="text-sm font-bold" style="color: #E87070">Today!</p>
+            <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Water every</p>
+            <p class="text-sm font-bold" style="color: #5AA8D4">{{ selected.water_frequency_days ? selected.water_frequency_days + ' days' : 'unknown' }}</p>
           </div>
         </div>
 
+        <!-- HEALTH BARS -->
         <div class="flex flex-col gap-2">
           <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Plant health</p>
           <div class="flex items-center gap-2">
@@ -224,19 +231,23 @@ const statusBg = (status) => {
           </div>
         </div>
 
+        <!-- LAST SCAN -->
         <p class="text-xs font-bold uppercase tracking-wide" style="color: #8AC870">
           last scan: 7/10 · 2 days ago
         </p>
 
+        <!-- UPLOAD BUTTON -->
         <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #F0C040; color: #8B5E2A">
           📷 upload photo for scan
         </button>
 
+        <!-- CHAT TOGGLE BUTTON -->
         <button @click="chatOpen = !chatOpen"
           class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #E87EA0; color: white">
           🐛 ask wormy
         </button>
 
+        <!-- CHAT PANEL -->
         <div v-if="chatOpen" class="flex flex-col gap-2">
           <div class="rounded-lg p-3 flex flex-col gap-2 h-48 overflow-y-auto" style="background: #3A6A2A">
             <div v-for="(msg, index) in chatMessages" :key="index"
@@ -304,34 +315,34 @@ const statusBg = (status) => {
           + add a plant
         </div>
 
+        <!-- ADD PLANT FORM -->
         <div v-if="showForm" class="p-4 border-t-2" style="background: #EDE5C5; border-color: #D4C8A0">
           <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color: #8B5E2A">New plant</p>
 
-<!-- SPECIES SEARCH -->
-<div class="relative mb-2">
-  <input
-    v-model="speciesSearch"
-    @input="searchSpecies(speciesSearch)"
-    type="text"
-    placeholder="Search for a plant..."
-    class="w-full px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
-  <div v-if="showSuggestions"
-    class="absolute w-full rounded-lg shadow-lg z-10 mt-1 overflow-hidden"
-    style="background: white; border: 1px solid #D4C8A0">
-    <div v-for="suggestion in speciesSuggestions" :key="suggestion.id"
-      @click="selectSpecies(suggestion)"
-      class="px-3 py-2 cursor-pointer text-sm hover:bg-amber-50"
-      style="color: #3A2A0A; border-bottom: 1px solid #F5EED8">
-      <p class="font-bold">{{ suggestion.common_name }}</p>
-      <p class="text-xs" style="color: #8B6A3A">{{ suggestion.scientific_name }}</p>
-    </div>
-  </div>
-</div>
+          <div class="relative mb-2">
+            <input
+              v-model="speciesSearch"
+              @input="searchSpecies(speciesSearch)"
+              type="text"
+              placeholder="Search for a plant..."
+              class="w-full px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
+            <div v-if="showSuggestions"
+              class="absolute w-full rounded-lg shadow-lg z-10 mt-1 overflow-hidden"
+              style="background: white; border: 1px solid #D4C8A0">
+              <div v-for="suggestion in speciesSuggestions" :key="suggestion.id"
+                @click="selectSpecies(suggestion)"
+                class="px-3 py-2 cursor-pointer text-sm hover:bg-amber-50"
+                style="color: #3A2A0A; border-bottom: 1px solid #F5EED8">
+                <p class="font-bold">{{ suggestion.common_name }}</p>
+                <p class="text-xs" style="color: #8B6A3A">{{ suggestion.scientific_name }}</p>
+              </div>
+            </div>
+          </div>
 
-<input v-model="newName" type="text" placeholder="Name"
-  class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
-<input v-model="newSpecies" type="text" placeholder="Species"
-  class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
+          <input v-model="newName" type="text" placeholder="Name"
+            class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
+          <input v-model="newSpecies" type="text" placeholder="Species"
+            class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
           <input v-model="newLocation" type="text" placeholder="Location (e.g. Herb · patio)"
             class="w-full mb-3 px-3 py-2 text-sm rounded-lg border" style="border-color: #D4C8A0; background: white; color: #3A2A0A" />
           <div class="flex gap-2">
@@ -396,15 +407,16 @@ const statusBg = (status) => {
         <div class="text-center">
           <h2 class="text-2xl font-bold" style="color: #F0C040">{{ selected.name }}</h2>
           <p class="text-xs uppercase tracking-widest mt-1" style="color: #C8E8A0">{{ selected.species }} · {{ selected.location }}</p>
+          <p class="text-sm font-bold uppercase mt-2" style="color: #C8E8A0">☀️ {{ selected.sunlight || 'sunlight unknown' }}</p>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div class="rounded-lg p-2" style="background: #3A6A2A">
             <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Last watered</p>
-            <p class="text-sm font-bold" style="color: #F0C040">5 days ago</p>
+            <p class="text-sm font-bold" style="color: #F0C040">{{ selected.last_watered ? selected.last_watered : 'not logged' }}</p>
           </div>
           <div class="rounded-lg p-2" style="background: #3A6A2A">
-            <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Next water</p>
-            <p class="text-sm font-bold" style="color: #E87070">Today!</p>
+            <p class="text-xs uppercase tracking-wide" style="color: #8AC870">Water every</p>
+            <p class="text-sm font-bold" style="color: #5AA8D4">{{ selected.water_frequency_days ? selected.water_frequency_days + ' days' : 'unknown' }}</p>
           </div>
         </div>
         <div class="flex flex-col gap-2">
