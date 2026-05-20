@@ -149,8 +149,15 @@ const logWatering = async () => {
   selected.value.last_watered = today
   const plant = plants.value.find(p => p.id === selected.value.id)
   if (plant) plant.last_watered = today
+}
 
-  console.log('Watering logged!')
+const waterHealth = (plant) => {
+  if (!plant.last_watered || !plant.water_frequency_days) return 50
+  const lastWatered = new Date(plant.last_watered)
+  const today = new Date()
+  const daysSince = Math.floor((today - lastWatered) / (1000 * 60 * 60 * 24))
+  const percent = Math.max(0, Math.round((1 - daysSince / plant.water_frequency_days) * 100))
+  return percent
 }
 
 const statusColor = (status) => {
@@ -244,9 +251,9 @@ const statusBg = (status) => {
           <div class="flex items-center gap-2">
             <span class="text-sm">💧</span>
             <div class="flex-1 rounded-full h-2" style="background: #3A6A2A">
-              <div class="h-2 rounded-full" style="width:15%; background: #5AA8D4"></div>
+              <div class="h-2 rounded-full" :style="{ width: waterHealth(selected) + '%', background: '#5AA8D4' }"></div>
             </div>
-            <span class="text-xs w-8 text-right" style="color: #C8E8A0">15%</span>
+            <span class="text-xs w-8 text-right" style="color: #C8E8A0">{{ waterHealth(selected) }}%</span>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-sm">☀️</span>
@@ -269,10 +276,11 @@ const statusBg = (status) => {
           last scan: 7/10 · 2 days ago
         </p>
 
+        <!-- LOG WATERING BUTTON -->
         <button @click="logWatering"
-  class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #5AA8D4; color: white">
-  💧 log watering
-</button>
+          class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #5AA8D4; color: white">
+          💧 log watering
+        </button>
 
         <!-- UPLOAD BUTTON -->
         <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #F0C040; color: #8B5E2A">
@@ -412,7 +420,7 @@ const statusBg = (status) => {
           </span>
           <div class="w-full flex flex-col gap-1">
             <div class="w-full rounded-full h-1" style="background: #2A5A1A">
-              <div class="h-1 rounded-full" style="width:15%; background: #5AA8D4"></div>
+              <div class="h-1 rounded-full" :style="{ width: waterHealth(plant) + '%', background: '#5AA8D4' }"></div>
             </div>
             <div class="w-full rounded-full h-1" style="background: #2A5A1A">
               <div class="h-1 rounded-full" style="width:90%; background: #F0C040"></div>
@@ -462,9 +470,9 @@ const statusBg = (status) => {
           <div class="flex items-center gap-2">
             <span class="text-sm">💧</span>
             <div class="flex-1 rounded-full h-2" style="background: #3A6A2A">
-              <div class="h-2 rounded-full" style="width:15%; background: #5AA8D4"></div>
+              <div class="h-2 rounded-full" :style="{ width: waterHealth(selected) + '%', background: '#5AA8D4' }"></div>
             </div>
-            <span class="text-xs w-8 text-right" style="color: #C8E8A0">15%</span>
+            <span class="text-xs w-8 text-right" style="color: #C8E8A0">{{ waterHealth(selected) }}%</span>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-sm">☀️</span>
