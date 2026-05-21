@@ -25,3 +25,5 @@ dist-ssr
 seed-species.js
 seed-species-targeted.js
 enrich-species.js
+.vercel
+.env*.local

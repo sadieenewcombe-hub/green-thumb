@@ -2,6 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { supabase } from './supabase'
 
+const scanLoading = ref(false)
+const scanResult = ref(null)
+const photoPreview = ref(null) // base64 preview shown in the UI
+const fileInput = ref(null)    // ref to the hidden <input type="file">
 const plants = ref([])
 const selected = ref(null)
 const weather = ref(null)
@@ -185,6 +189,94 @@ const statusBg = (status) => {
   if (status === 'frost') return '#5AA8D4'
   return '#6AAE5A'
 }
+const handlePhotoSelect = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    photoPreview.value = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+const scanPlant = async () => {
+  if (!photoPreview.value || !selected.value) return
+  scanLoading.value = true
+  scanResult.value = null
+  try {
+    const [header, imageBase64] = photoPreview.value.split(',')
+    const mediaType = header.match(/:(.*?);/)[1]
+
+    const fileName = `${selected.value.id}-${Date.now()}.jpg`
+    const byteString = atob(imageBase64)
+    const byteArray = new Uint8Array(byteString.length)
+    for (let i = 0; i < byteString.length; i++) {
+      byteArray[i] = byteString.charCodeAt(i)
+    }
+    const blob = new Blob([byteArray], { type: mediaType })
+
+    const { error: uploadError } = await supabase.storage
+      .from('plant-photos')
+      .upload(fileName, blob, { upsert: true })
+    if (uploadError) throw uploadError
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('plant-photos')
+      .getPublicUrl(fileName)
+
+    const response = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64,
+        mediaType,
+        plantName: selected.value.name,
+        plantSpecies: selected.value.species,
+        plantLocation: selected.value.location,
+        sunlight: selected.value.sunlight,
+        waterFrequency: selected.value.water_frequency_days
+      })
+    })
+
+    const result = await response.json()
+    scanResult.value = result
+
+    await supabase.from('scan_photos').insert({
+      plant_id: selected.value.id,
+      photo_url: publicUrl,
+      score: result.score,
+      diagnosis: result.summary
+    })
+
+    const { data: allScans } = await supabase
+      .from('scan_photos')
+      .select('id, created_at')
+      .eq('plant_id', selected.value.id)
+      .order('created_at', { ascending: false })
+
+    if (allScans && allScans.length > 3) {
+      const toDelete = allScans.slice(3).map(s => s.id)
+      await supabase.from('scan_photos').delete().in('id', toDelete)
+    }
+
+    await supabase.from('plants').update({
+      photo_url: publicUrl,
+      score: result.score
+    }).eq('id', selected.value.id)
+
+    const plantIndex = plants.value.findIndex(p => p.id === selected.value.id)
+if (plantIndex !== -1) {
+  plants.value[plantIndex] = { ...plants.value[plantIndex], photo_url: publicUrl, score: result.score }
+  selected.value = plants.value[plantIndex]
+}
+
+  } catch (error) {
+    console.error('Scan error:', error)
+    scanResult.value = { summary: 'Something went wrong. Try again!', score: null, issues: [], advice: '' }
+  } finally {
+    scanLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -233,10 +325,11 @@ const statusBg = (status) => {
       <!-- LEFT: PLANT DETAIL -->
       <div v-if="selected" class="w-80 p-4 flex flex-col gap-4" style="background: #5A8A48">
 
-        <!-- EMOJI -->
-        <div class="rounded-xl h-28 flex items-center justify-center text-6xl" style="background: #3A6A2A">
-          {{ selected.emoji }}
-        </div>
+        <!-- EMOJI / PHOTO -->
+<div class="rounded-xl h-28 flex items-center justify-center overflow-hidden" style="background: #3A6A2A">
+  <img v-if="selected.photo_url" :src="selected.photo_url" class="w-full h-full object-cover" />
+  <span v-else class="text-6xl">{{ selected.emoji }}</span>
+</div>
 
         <!-- NAME + SPECIES + SUNLIGHT -->
         <div class="text-center">
@@ -295,9 +388,34 @@ const statusBg = (status) => {
         </button>
 
         <!-- UPLOAD BUTTON -->
-        <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #F0C040; color: #8B5E2A">
-          📷 upload photo for scan
-        </button>
+<input ref="fileInput" type="file" accept="image/*" class="hidden" @change="handlePhotoSelect" />
+<div v-if="photoPreview" class="rounded-xl overflow-hidden" style="height: 120px">
+  <img :src="photoPreview" class="w-full h-full object-cover" />
+</div>
+<button
+  @click="photoPreview ? scanPlant() : fileInput.click()"
+  class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer"
+  :style="scanLoading ? 'background: #D4C8A0; color: #8B5E2A' : 'background: #F0C040; color: #8B5E2A'">
+  <span v-if="scanLoading">🔍 scanning...</span>
+  <span v-else-if="photoPreview">🔍 scan this photo</span>
+  <span v-else>📷 upload photo for scan</span>
+</button>
+<div v-if="scanResult" class="rounded-xl p-3 flex flex-col gap-2" style="background: #3A6A2A">
+  <div class="flex items-center justify-between">
+    <span class="text-lg">{{ scanResult.emoji }}</span>
+    <span class="text-xs font-bold px-2 py-1 rounded-full" style="background: #F0C040; color: #8B5E2A">
+      {{ scanResult.score }}/10
+    </span>
+  </div>
+  <p class="text-xs" style="color: #C8E8A0">{{ scanResult.summary }}</p>
+  <ul v-if="scanResult.issues?.length" class="flex flex-col gap-1">
+    <li v-for="issue in scanResult.issues" :key="issue"
+      class="text-xs px-2 py-1 rounded" style="background: #2A5A1A; color: #F0C040">
+      ⚠️ {{ issue }}
+    </li>
+  </ul>
+  <p class="text-xs italic" style="color: #8AC870">💡 {{ scanResult.advice }}</p>
+</div>
 
         <!-- CHAT TOGGLE BUTTON -->
         <button @click="chatOpen = !chatOpen"
