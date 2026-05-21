@@ -27,3 +27,4 @@ seed-species-targeted.js
 enrich-species.js
 .vercel
 .env*.local
+.env
