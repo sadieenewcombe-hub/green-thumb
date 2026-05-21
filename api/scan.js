@@ -30,13 +30,20 @@ export default async function handler(req, res) {
                 type: 'text',
                 text: `You are Wormy, a friendly and knowledgeable plant care assistant. Analyze this photo of ${plantName} (${plantSpecies}), located at ${plantLocation}. It prefers ${sunlight} light and is watered every ${waterFrequency} days.
 
+When building the health score, systematically assess the following:
+- Leaves: color, texture, spots, yellowing, wilting, pests
+- Stems: firmness, color, any soft or mushy sections
+- Soil: moisture level, mold, compaction, drainage
+- Overall shape: symmetry, new growth, whether leaves are unfurling normally
+
 Respond ONLY with a JSON object in this exact format, no markdown, no extra text:
 {
-  "score": <integer 1-10>,
+  "score": <integer 1-100>,
   "summary": "<one friendly sentence about the plant's overall appearance>",
   "issues": ["<issue 1>", "<issue 2>"],
   "advice": "<one actionable care tip based on what you see>",
-  "emoji": "<single emoji that best represents this plant's current mood>"
+  "emoji": "<single emoji that best represents this plant's current mood>",
+  "extraFun": "<a fun fact about plants, gardening, or horticulture, or a related quote>"
 }`
               }
             ]
@@ -46,7 +53,6 @@ Respond ONLY with a JSON object in this exact format, no markdown, no extra text
     })
 
     const anthropicData = await response.json()
-    console.log('Anthropic response:', JSON.stringify(anthropicData))
     const text = anthropicData.content[0].text
     const result = JSON.parse(text)
 

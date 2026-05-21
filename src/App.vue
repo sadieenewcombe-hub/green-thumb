@@ -419,7 +419,7 @@ const timeAgo = (dateStr) => {
           <div class="flex items-center justify-between">
             <span class="text-lg">{{ scanResult.emoji }}</span>
             <span class="text-xs font-bold px-2 py-1 rounded-full" style="background: #F0C040; color: #8B5E2A">
-              {{ scanResult.score }}/10
+              {{ scanResult.score }}/100
             </span>
           </div>
           <p class="text-xs" style="color: #C8E8A0">{{ scanResult.summary }}</p>
@@ -430,6 +430,7 @@ const timeAgo = (dateStr) => {
             </li>
           </ul>
           <p class="text-xs italic" style="color: #8AC870">💡 {{ scanResult.advice }}</p>
+          <p class="text-xs mt-1 px-2 py-1 rounded" style="background: #2A5A1A; color: #C8E8A0">🌿 {{ scanResult.extraFun }}</p>
         </div>
 
         <!-- CHAT TOGGLE BUTTON -->
@@ -497,7 +498,7 @@ const timeAgo = (dateStr) => {
               {{ computedStatus(plant) }}
             </span>
           </div>
-          <p class="text-right font-bold" style="color: #3A2A0A">{{ plant.score }}/10</p>
+          <p class="text-right font-bold" style="color: #3A2A0A">{{ plant.score }}/100</p>
         </div>
 
         <div @click="showForm = true"
