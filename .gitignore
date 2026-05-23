@@ -28,3 +28,4 @@ enrich-species.js
 .vercel
 .env*.local
 .env
+enrich-plant-types.js

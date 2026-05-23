@@ -2,44 +2,69 @@
 import { ref, onMounted, computed } from 'vue'
 import { supabase } from './supabase'
 
+const plants = ref([])
+const selected = ref(null)
+const weather = ref(null)
+const currentView = ref('roster')
+const modalOpen = ref(false)
+const showForm = ref(false)
 const scanLoading = ref(false)
 const scanResult = ref(null)
 const photoPreview = ref(null)
 const fileInput = ref(null)
-const plants = ref([])
-const selected = ref(null)
-const weather = ref(null)
-const showForm = ref(false)
+
 const newName = ref('')
 const newSpecies = ref('')
 const newLocation = ref('')
+const newEmoji = ref('🌱')
+const newPlantType = ref('herb')
 const speciesSearch = ref('')
 const speciesSuggestions = ref([])
 const showSuggestions = ref(false)
 const selectedSpeciesData = ref(null)
-const currentView = ref('roster')
-const modalOpen = ref(false)
-const wormyMessage = computed(() => {
-  const thirsty = plants.value.filter(p => computedStatus(p) === 'water')
-  if (thirsty.length === 0) return 'all plants are happy! 🌱'
-  if (thirsty.length === 1) return `psst... ${thirsty[0].name} is thirsty! 💧`
-  return `${thirsty.length} plants need water! 💧`
-})
+
 const chatOpen = ref(false)
 const chatMessages = ref([
-  { role: 'assistant', content: 'Hi! Ask me anything about your plants, or upload a photo for a diagnosis.' }
+  { role: 'assistant', content: "Hey! I'm Wormy 🐛 Ask me anything about your plants!" }
 ])
 const chatInput = ref('')
 const chatLoading = ref(false)
 
+const plantTypes = {
+  herb:      { label: 'Herb',      color: '#5F7A3A' },
+  flower:    { label: 'Flower',    color: '#C4622D' },
+  tree:      { label: 'Tree',      color: '#5F3924' },
+  succulent: { label: 'Succulent', color: '#628A81' },
+  vegetable: { label: 'Vegetable', color: '#8E2605' },
+  vine:      { label: 'Vine',      color: '#3D6B2A' },
+}
+const typeConfig = (type) => plantTypes[type] || plantTypes.herb
+
+const wormyImage = computed(() => {
+  const statuses = plants.value.map(p => computedStatus(p))
+  const neglected = statuses.filter(s => s === 'neglected').length
+  const thirsty = statuses.filter(s => s === 'thirsty').length
+  if (neglected > 0) return '/wormy-worried.png'
+  if (thirsty > 1) return '/wormy-thinking.png'
+  if (thirsty === 0 && plants.value.length > 0) return '/wormy-happy.png'
+  return '/wormy.png'
+})
+
+const wormyMessage = computed(() => {
+  const thirsty = plants.value.filter(p => computedStatus(p) === 'thirsty')
+  const neglected = plants.value.filter(p => computedStatus(p) === 'neglected')
+  if (neglected.length > 0) return `${neglected[0].name} needs attention! 😢`
+  if (thirsty.length === 0) return 'all plants are happy! 🌱'
+  if (thirsty.length === 1) return `${thirsty[0].name} is thirsty! 💧`
+  return `${thirsty.length} plants need water! 💧`
+})
+
 onMounted(async () => {
-  const { data, error } = await supabase.from('plants').select('*')
-  if (error) {
-    console.error('Error fetching plants:', error)
-    return
+  const { data, error } = await supabase.from('plants').select('*').order('id')
+  if (!error) {
+    plants.value = data
+    selected.value = data[0] || null
   }
-  plants.value = data
-  selected.value = data[0]
 })
 
 const fetchWeather = async () => {
@@ -47,78 +72,87 @@ const fetchWeather = async () => {
   const data = await res.json()
   weather.value = data.current
 }
-
 fetchWeather()
 
-const addPlant = async () => {
-  const { data, error } = await supabase
-    .from('plants')
-    .insert([{
-      name: newName.value,
-      species: newSpecies.value,
-      location: newLocation.value,
-      status: 'good',
-      score: 8,
-      emoji: '🌱',
-      water_frequency_days: selectedSpeciesData.value?.water_frequency_days || null,
-      sunlight: selectedSpeciesData.value?.sunlight || null
-    }])
-    .select()
-  if (error) {
-    console.error('Error adding plant:', error)
-    return
-  }
-  plants.value.push(data[0])
-  newName.value = ''
-  newSpecies.value = ''
-  newLocation.value = ''
-  speciesSearch.value = ''
-  selectedSpeciesData.value = null
-  showForm.value = false
+const waterHealth = (plant) => {
+  if (!plant.last_watered || !plant.water_frequency_days) return 50
+  const [y, m, d] = plant.last_watered.split('-').map(Number)
+  const last = new Date(y, m - 1, d)
+  const today = new Date(); today.setHours(0,0,0,0)
+  const days = Math.floor((today - last) / 86400000)
+  return Math.max(0, Math.round((1 - days / plant.water_frequency_days) * 100))
 }
 
-const sendMessage = async () => {
-  if (!chatInput.value.trim()) return
-  const userMessage = chatInput.value
-  chatMessages.value.push({ role: 'user', content: userMessage })
-  chatInput.value = ''
-  chatLoading.value = true
-  try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: chatMessages.value.filter(m => m.role === 'user' || m.role === 'assistant'),
-        plantName: selected.value?.name,
-        plantSpecies: selected.value?.species,
-        plantLocation: selected.value?.location
-      })
-    })
-    const data = await response.json()
-    chatMessages.value.push({ role: 'assistant', content: data.content[0].text })
-  } catch (error) {
-    console.error('Chat error:', error)
-    chatMessages.value.push({ role: 'assistant', content: 'Sorry, something went wrong. Try again!' })
-  } finally {
-    chatLoading.value = false
+const computedStatus = (plant) => {
+  if (!plant.last_watered) return 'neglected'
+  const [y, m, d] = plant.last_watered.split('-').map(Number)
+  const last = new Date(y, m - 1, d)
+  const today = new Date(); today.setHours(0,0,0,0)
+  const daysSince = Math.floor((today - last) / 86400000)
+  const temp = weather.value?.temperature_2m
+  if (daysSince > 30) return 'neglected'
+  if (temp && temp < 40) return 'cold'
+  if (temp && temp > 90) return 'hot'
+  if (daysSince > 14) return 'hungry'
+  const wh = waterHealth(plant)
+  if (wh < 30) return 'thirsty'
+  if (wh > 70) return 'happy'
+  return 'good'
+}
+
+const statusConfig = {
+  happy:    { color: '#5F7A3A', label: 'Happy 😊' },
+  thirsty:  { color: '#628A81', label: 'Thirsty 💧' },
+  neglected:{ color: '#8E2605', label: 'Neglected 😢' },
+  cold:     { color: '#2980B9', label: 'Cold 🥶' },
+  hot:      { color: '#C4622D', label: 'Hot 🥵' },
+  hungry:   { color: '#C4622D', label: 'Hungry 🌱' },
+  good:     { color: '#5F7A3A', label: 'Good ✅' },
+}
+const getStatusColor = (s) => statusConfig[s]?.color || '#5F7A3A'
+const getStatusLabel = (s) => statusConfig[s]?.label || s
+const hpHearts = (score) => score ? Math.round((score / 100) * 5) : 0
+
+const selectPlant = (plant) => {
+  selected.value = plant
+  scanResult.value = null
+  photoPreview.value = null
+}
+
+const logWatering = async () => {
+  const today = new Date().toISOString().split('T')[0]
+  await supabase.from('care_events').insert([{ plant_id: selected.value.id, type: 'watering', date: today }])
+  await supabase.from('plants').update({ last_watered: today }).eq('id', selected.value.id)
+  selected.value.last_watered = today
+  const plant = plants.value.find(p => p.id === selected.value.id)
+  if (plant) plant.last_watered = today
+}
+
+const addPlant = async () => {
+  const { data, error } = await supabase.from('plants').insert([{
+    name: newName.value,
+    species: newSpecies.value,
+    location: newLocation.value,
+    status: 'good',
+    score: null,
+    emoji: newEmoji.value || '🌱',
+    plant_type: selectedSpeciesData.value?.plant_type || newPlantType.value,
+    water_frequency_days: selectedSpeciesData.value?.water_frequency_days || null,
+    sunlight: selectedSpeciesData.value?.sunlight || null
+  }]).select()
+  if (!error) {
+    plants.value.push(data[0])
+    newName.value = ''; newSpecies.value = ''; newLocation.value = ''
+    newEmoji.value = '🌱'; newPlantType.value = 'herb'
+    speciesSearch.value = ''; selectedSpeciesData.value = null
+    showForm.value = false
   }
 }
 
 const searchSpecies = async (query) => {
-  if (query.length < 2) {
-    speciesSuggestions.value = []
-    showSuggestions.value = false
-    return
-  }
-  const { data, error } = await supabase
-    .from('species')
-    .select('*')
-    .ilike('common_name', `%${query}%`)
-    .limit(5)
-  if (!error) {
-    speciesSuggestions.value = data
-    showSuggestions.value = data.length > 0
-  }
+  if (query.length < 2) { speciesSuggestions.value = []; showSuggestions.value = false; return }
+  const { data, error } = await supabase.from('species').select('*').ilike('common_name', `%${query}%`).limit(5)
+  if (!error) { speciesSuggestions.value = data; showSuggestions.value = data.length > 0 }
 }
 
 const selectSpecies = (species) => {
@@ -127,160 +161,87 @@ const selectSpecies = (species) => {
   speciesSearch.value = species.common_name
   showSuggestions.value = false
   selectedSpeciesData.value = species
-}
-
-const logWatering = async () => {
-  const today = new Date().toISOString().split('T')[0]
-
-  const { error: eventError } = await supabase
-    .from('care_events')
-    .insert([{
-      plant_id: selected.value.id,
-      type: 'watering',
-      date: today
-    }])
-
-  if (eventError) {
-    console.error('Error logging watering:', eventError)
-    return
-  }
-
-  const { error: updateError } = await supabase
-    .from('plants')
-    .update({ last_watered: today })
-    .eq('id', selected.value.id)
-
-  if (updateError) {
-    console.error('Error updating last watered:', updateError)
-    return
-  }
-
-  selected.value.last_watered = today
-  const plant = plants.value.find(p => p.id === selected.value.id)
-  if (plant) plant.last_watered = today
-}
-
-const waterHealth = (plant) => {
-  if (!plant.last_watered || !plant.water_frequency_days) return 50
-  const [year, month, day] = plant.last_watered.split('-').map(Number)
-  const lastWatered = new Date(year, month - 1, day)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const daysSince = Math.floor((today - lastWatered) / (1000 * 60 * 60 * 24))
-  const percent = Math.max(0, Math.round((1 - daysSince / plant.water_frequency_days) * 100))
-  return percent
-}
-
-const computedStatus = (plant) => {
-  if (!plant.last_watered || !plant.water_frequency_days) return plant.status
-  const health = waterHealth(plant)
-  if (health === 0) return 'water'
-  return 'good'
-}
-
-const statusBg = (status) => {
-  if (status === 'water') return '#628A81'
-  if (status === 'repot') return '#8E2605'
-  if (status === 'frost') return '#628A81'
-  return '#5F7A3A'
+  newPlantType.value = species.plant_type || 'herb'
 }
 
 const handlePhotoSelect = (event) => {
   const file = event.target.files[0]
   if (!file) return
   const reader = new FileReader()
-  reader.onload = (e) => {
-    photoPreview.value = e.target.result
-  }
+  reader.onload = (e) => { photoPreview.value = e.target.result }
   reader.readAsDataURL(file)
 }
 
 const scanPlant = async () => {
   if (!photoPreview.value || !selected.value) return
-  scanLoading.value = true
-  scanResult.value = null
+  scanLoading.value = true; scanResult.value = null
   try {
     const [header, imageBase64] = photoPreview.value.split(',')
     const mediaType = header.match(/:(.*?);/)[1]
-
     const fileName = `${selected.value.id}-${Date.now()}.jpg`
     const byteString = atob(imageBase64)
     const byteArray = new Uint8Array(byteString.length)
-    for (let i = 0; i < byteString.length; i++) {
-      byteArray[i] = byteString.charCodeAt(i)
-    }
+    for (let i = 0; i < byteString.length; i++) byteArray[i] = byteString.charCodeAt(i)
     const blob = new Blob([byteArray], { type: mediaType })
-
-    const { error: uploadError } = await supabase.storage
-      .from('plant-photos')
-      .upload(fileName, blob, { upsert: true })
+    const { error: uploadError } = await supabase.storage.from('plant-photos').upload(fileName, blob, { upsert: true })
     if (uploadError) throw uploadError
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('plant-photos')
-      .getPublicUrl(fileName)
-
+    const { data: { publicUrl } } = supabase.storage.from('plant-photos').getPublicUrl(fileName)
     const response = await fetch('/api/scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imageBase64,
-        mediaType,
-        plantName: selected.value.name,
-        plantSpecies: selected.value.species,
-        plantLocation: selected.value.location,
-        sunlight: selected.value.sunlight,
-        waterFrequency: selected.value.water_frequency_days
-      })
+      body: JSON.stringify({ imageBase64, mediaType, plantName: selected.value.name, plantSpecies: selected.value.species, plantLocation: selected.value.location, sunlight: selected.value.sunlight, waterFrequency: selected.value.water_frequency_days })
     })
-
     const result = await response.json()
     scanResult.value = result
-
-    await supabase.from('scan_photos').insert({
-      plant_id: selected.value.id,
-      photo_url: publicUrl,
-      score: result.score,
-      diagnosis: result.summary
-    })
-
-    const { data: allScans } = await supabase
-      .from('scan_photos')
-      .select('id, created_at')
-      .eq('plant_id', selected.value.id)
-      .order('created_at', { ascending: false })
-
-    if (allScans && allScans.length > 3) {
-      const toDelete = allScans.slice(3).map(s => s.id)
-      await supabase.from('scan_photos').delete().in('id', toDelete)
-    }
-
-    await supabase.from('plants').update({
-      photo_url: publicUrl,
-      score: result.score
-    }).eq('id', selected.value.id)
-
+    await supabase.from('scan_photos').insert({ plant_id: selected.value.id, photo_url: publicUrl, score: result.score, diagnosis: result.summary })
+    await supabase.from('plants').update({ photo_url: publicUrl, score: result.score }).eq('id', selected.value.id)
     const plantIndex = plants.value.findIndex(p => p.id === selected.value.id)
     if (plantIndex !== -1) {
       plants.value[plantIndex] = { ...plants.value[plantIndex], photo_url: publicUrl, score: result.score }
       selected.value = plants.value[plantIndex]
     }
-
   } catch (error) {
     console.error('Scan error:', error)
     scanResult.value = { summary: 'Something went wrong. Try again!', score: null, issues: [], advice: '' }
-  } finally {
-    scanLoading.value = false
-  }
+  } finally { scanLoading.value = false }
+}
+
+const sendMessage = async () => {
+  if (!chatInput.value.trim()) return
+  const userMessage = chatInput.value
+  chatMessages.value.push({ role: 'user', content: userMessage })
+  chatInput.value = ''; chatLoading.value = true
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: chatMessages.value.filter(m => m.role === 'user' || m.role === 'assistant'), plantName: selected.value?.name, plantSpecies: selected.value?.species, plantLocation: selected.value?.location })
+    })
+    const data = await response.json()
+    chatMessages.value.push({ role: 'assistant', content: data.content[0].text })
+  } catch { chatMessages.value.push({ role: 'assistant', content: 'Sorry, something went wrong!' }) }
+  finally { chatLoading.value = false }
+}
+
+const navigateGarden = (direction) => {
+  if (!selected.value) return
+  const cols = 4
+  const idx = plants.value.findIndex(p => p.id === selected.value.id)
+  if (idx === -1) return
+  let next = idx
+  if (direction === 'east'  && (idx + 1) % cols !== 0 && idx + 1 < plants.value.length) next = idx + 1
+  if (direction === 'west'  && idx % cols !== 0) next = idx - 1
+  if (direction === 'south' && idx + cols < plants.value.length) next = idx + cols
+  if (direction === 'north' && idx - cols >= 0) next = idx - cols
+  if (next !== idx) selected.value = plants.value[next]
 }
 
 const timeAgo = (dateStr) => {
   if (!dateStr) return 'never'
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const days = Math.floor((today - date) / (1000 * 60 * 60 * 24))
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const today = new Date(); today.setHours(0,0,0,0)
+  const days = Math.floor((today - date) / 86400000)
   if (days === 0) return 'today'
   if (days === 1) return 'yesterday'
   return `${days} days ago`
@@ -288,351 +249,323 @@ const timeAgo = (dateStr) => {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col" style="font-family: 'Rumpelstiltskin', cursive; background-image: url('/background.png'); background-size: cover; background-position: top center; background-attachment: fixed;">
+  <div class="gt-app" style="font-family: 'Rumpelstiltskin', cursive;">
 
-    <!-- HEADER -->
-    <div class="px-4 py-3 flex items-center justify-between border-b-4" style="background: #628A81; border-color: #FDC018">
-      <div>
-        <h1 class="text-3xl" style="font-family: 'BlobSpongey', cursive; color: #FDC018">Green Thumb</h1>
-        <p class="text-xs tracking-widest uppercase" style="color: #FDF6E3">my garden</p>
+    <!-- FIXED BACKGROUND -->
+    <div class="gt-bg"></div>
+
+    <!-- SKY ZONE — scrolls with page -->
+    <div class="gt-sky-zone">
+      <!-- Weather cloud top-left -->
+      <div class="gt-cloud gt-cloud-tl">
+        <span class="cloud-icon">{{ weather && weather.temperature_2m >= 90 ? '🌡️' : weather && weather.temperature_2m <= 32 ? '🌨️' : '☀️' }}</span>
+        <span class="cloud-text">{{ weather ? weather.temperature_2m + '°F' : '...' }}</span>
       </div>
 
-      <!-- WORMY IN HEADER -->
-      <div class="flex flex-col items-center">
-        <div class="text-xs font-bold px-3 py-1 rounded-xl mb-1" style="background: #3D1F0D; color: #FDC018">
-          {{ wormyMessage }}
-        </div>
-        <div class="text-4xl" style="cursor: pointer" @click="chatOpen = !chatOpen">🐛</div>
+      <!-- Weather cloud bottom-left -->
+      <div class="gt-cloud gt-cloud-bl">
+        <span class="cloud-icon">{{ weather && weather.precipitation > 0 ? '🌧️' : weather && weather.relative_humidity_2m > 80 ? '☁️' : '🌤️' }}</span>
+        <span class="cloud-text">{{ weather ? (weather.precipitation > 0 ? weather.precipitation + 'mm rain' : weather.relative_humidity_2m > 80 ? 'Cloudy' : 'Clear') : '...' }}</span>
       </div>
 
-      <div class="flex gap-3">
-        <button @click="currentView = 'roster'"
-          class="text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide"
-          :style="currentView === 'roster'
-            ? 'background: #FDC018; color: #3D1F0D'
-            : 'border: 2px solid #FDF6E3; color: #FDF6E3'">Roster</button>
-        <button @click="currentView = 'garden'"
-          class="text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wide"
-          :style="currentView === 'garden'
-            ? 'background: #FDC018; color: #3D1F0D'
-            : 'border: 2px solid #FDF6E3; color: #FDF6E3'">Garden</button>
+      <!-- Logo center -->
+      <div class="gt-logo">
+        <h1 class="gt-logo-text">the Green Thumb</h1>
+        <p class="gt-logo-sub">my garden</p>
+      </div>
+
+      <!-- Roster cloud top-right -->
+      <div class="gt-cloud gt-cloud-tr gt-cloud-btn" :class="{ active: currentView === 'roster' }" @click="currentView = 'roster'">
+        <span class="cloud-text cloud-btn-text">Roster</span>
+      </div>
+
+      <!-- Garden cloud bottom-right -->
+      <div class="gt-cloud gt-cloud-br gt-cloud-btn" :class="{ active: currentView === 'garden' }" @click="currentView = 'garden'">
+        <span class="cloud-text cloud-btn-text">Garden</span>
       </div>
     </div>
 
-    <!-- WEATHER STRIP -->
-    <div class="px-4 py-2 flex items-center gap-6 text-xs font-bold" style="background: #5F3924; color: #FDF6E3">
-      <span v-if="weather">☀️ {{ weather.temperature_2m }}°F today</span>
-      <span v-if="weather">💧 {{ weather.relative_humidity_2m }}% humidity</span>
-      <span v-if="weather">🌧 precipitation: {{ weather.precipitation }}mm</span>
-      <span class="ml-auto px-3 py-1 rounded-full text-xs" style="background: #628A81; color: #FDF6E3">❄️ frost fri — bring plants in!</span>
+    <!-- WORMY at grass line — scrolls with page -->
+    <div class="gt-wormy-zone">
+      <div class="gt-wormy" @click="chatOpen = !chatOpen">
+        <div class="gt-wormy-bubble">{{ wormyMessage }}</div>
+        <img :src="wormyImage" class="gt-wormy-img" alt="Wormy" />
+      </div>
     </div>
 
-    <!-- ROSTER VIEW -->
-    <div v-if="currentView === 'roster'" class="flex flex-1">
+    <!-- SOIL CONTENT -->
+    <div class="gt-content">
 
-      <!-- LEFT: PLANT DETAIL -->
-      <div v-if="selected" class="w-80 p-4 flex flex-col gap-4" style="background: #3D1F0D">
+      <!-- ROSTER VIEW -->
+      <div v-if="currentView === 'roster'" class="gt-roster-layout">
 
-        <!-- EMOJI / PHOTO -->
-        <div class="rounded-xl h-28 flex items-center justify-center overflow-hidden" style="background: #5F3924">
-          <img v-if="selected.photo_url" :src="selected.photo_url" class="w-full h-full object-cover" />
-          <span v-else class="text-6xl">{{ selected.emoji }}</span>
-        </div>
-
-        <!-- NAME + SPECIES + SUNLIGHT -->
-        <div class="text-center">
-          <h2 class="text-2xl font-bold" style="color: #FDC018">{{ selected.name }}</h2>
-          <p class="text-xs uppercase tracking-widest mt-1" style="color: #FDF6E3">{{ selected.species }} · {{ selected.location }}</p>
-          <p class="text-sm font-bold uppercase mt-2" style="color: #FDF6E3">☀️ {{ selected.sunlight || 'sunlight unknown' }}</p>
-        </div>
-
-        <!-- STAT GRID -->
-        <div class="grid grid-cols-2 gap-2">
-          <div class="rounded-lg p-2" style="background: #5F3924">
-            <p class="text-xs uppercase tracking-wide" style="color: #FDC018">Last watered</p>
-            <p class="text-sm font-bold" style="color: #FDF6E3">{{ timeAgo(selected.last_watered) }}</p>
+        <!-- LEFT: PROFILE CARD -->
+        <div v-if="selected" class="gt-profile-card">
+          <div class="card-band" :style="{ background: typeConfig(selected.plant_type).color }">
+            <span class="band-label">{{ typeConfig(selected.plant_type).label }}</span>
+            <span class="band-id">#{{ String(selected.id).padStart(3, '0') }}</span>
           </div>
-          <div class="rounded-lg p-2" style="background: #5F3924">
-            <p class="text-xs uppercase tracking-wide" style="color: #FDC018">Water every</p>
-            <p class="text-sm font-bold" style="color: #628A81">{{ selected.water_frequency_days ? selected.water_frequency_days + ' days' : 'unknown' }}</p>
+          <div class="card-art">
+            <img v-if="selected.photo_url" :src="selected.photo_url" class="card-photo" />
+            <span v-else class="card-emoji">{{ selected.emoji }}</span>
           </div>
-        </div>
-
-        <!-- HEALTH BARS -->
-        <div class="flex flex-col gap-2">
-          <p class="text-xs uppercase tracking-wide" style="color: #FDC018">Plant health</p>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">💧</span>
-            <div class="flex-1 rounded-full h-2" style="background: #5F3924">
-              <div class="h-2 rounded-full" :style="{ width: waterHealth(selected) + '%', background: '#628A81' }"></div>
+          <div class="card-name-block">
+            <h2 class="card-name">{{ selected.name }}</h2>
+            <p class="card-scientific">{{ selected.species }}</p>
+            <p class="card-meta">📍 {{ selected.location }} &nbsp;·&nbsp; ☀️ {{ selected.sunlight || '?' }}</p>
+          </div>
+          <div class="card-hp">
+            <span class="hp-label">HP</span>
+            <span v-for="i in 5" :key="i" class="hp-heart" :class="{ filled: i <= hpHearts(selected.score) }">♥</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-row">
+              <span class="stat-icon">💧</span>
+              <div class="stat-track"><div class="stat-fill water" :style="{ width: waterHealth(selected) + '%' }"></div></div>
+              <span class="stat-pct">{{ waterHealth(selected) }}%</span>
             </div>
-            <span class="text-xs w-8 text-right" style="color: #FDF6E3">{{ waterHealth(selected) }}%</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">☀️</span>
-            <div class="flex-1 rounded-full h-2" style="background: #5F3924">
-              <div class="h-2 rounded-full" style="width:90%; background: #FDC018"></div>
+            <div class="stat-row">
+              <span class="stat-icon">☀️</span>
+              <div class="stat-track"><div class="stat-fill sun" style="width:90%"></div></div>
+              <span class="stat-pct">90%</span>
             </div>
-            <span class="text-xs w-8 text-right" style="color: #FDF6E3">90%</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">❤️</span>
-            <div class="flex-1 rounded-full h-2" style="background: #5F3924">
-              <div class="h-2 rounded-full" style="width:70%; background: #E54B1F"></div>
-            </div>
-            <span class="text-xs w-8 text-right" style="color: #FDF6E3">70%</span>
-          </div>
-        </div>
-
-        <!-- LAST SCAN -->
-        <p class="text-xs font-bold uppercase tracking-wide" style="color: #FDC018">
-          last scan: {{ selected.score ? selected.score + '/100' : 'never' }}{{ selected.score ? ' · ' + timeAgo(selected.last_watered) : '' }}
-        </p>
-
-        <!-- LOG WATERING BUTTON -->
-        <button @click="logWatering"
-          class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #628A81; color: #FDF6E3">
-          💧 log watering
-        </button>
-
-        <!-- UPLOAD BUTTON -->
-        <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="handlePhotoSelect" />
-        <div v-if="photoPreview" class="rounded-xl overflow-hidden" style="height: 120px">
-          <img :src="photoPreview" class="w-full h-full object-cover" />
-        </div>
-        <button
-          @click="photoPreview ? scanPlant() : fileInput.click()"
-          class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer"
-          :style="scanLoading ? 'background: #5F3924; color: #FDF6E3' : 'background: #FDC018; color: #3D1F0D'">
-          <span v-if="scanLoading">🔍 scanning...</span>
-          <span v-else-if="photoPreview">🔍 scan this photo</span>
-          <span v-else>📷 upload photo for scan</span>
-        </button>
-        <div v-if="scanResult" class="rounded-xl p-3 flex flex-col gap-2" style="background: #5F3924">
-          <div class="flex items-center justify-between">
-            <span class="text-lg">{{ scanResult.emoji }}</span>
-            <span class="text-xs font-bold px-2 py-1 rounded-full" style="background: #FDC018; color: #3D1F0D">
-              {{ scanResult.score }}/100
-            </span>
-          </div>
-          <p class="text-xs" style="color: #FDF6E3">{{ scanResult.summary }}</p>
-          <ul v-if="scanResult.issues?.length" class="flex flex-col gap-1">
-            <li v-for="issue in scanResult.issues" :key="issue"
-              class="text-xs px-2 py-1 rounded" style="background: #3D1F0D; color: #FDC018">
-              ⚠️ {{ issue }}
-            </li>
-          </ul>
-          <p class="text-xs italic" style="color: #FDF6E3">💡 {{ scanResult.advice }}</p>
-          <p class="text-xs mt-1 px-2 py-1 rounded" style="background: #3D1F0D; color: #FDF6E3">🌿 {{ scanResult.extraFun }}</p>
-        </div>
-
-        <!-- CHAT TOGGLE BUTTON -->
-        <button @click="chatOpen = !chatOpen"
-          class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer" style="background: #E54B1F; color: #FDF6E3">
-          🐛 ask wormy
-        </button>
-
-        <!-- CHAT PANEL -->
-        <div v-if="chatOpen" class="flex flex-col gap-2">
-          <div class="rounded-lg p-3 flex flex-col gap-2 h-48 overflow-y-auto" style="background: #5F3924">
-            <div v-for="(msg, index) in chatMessages" :key="index"
-              :class="msg.role === 'user' ? 'text-right' : 'text-left'">
-              <span :style="msg.role === 'user'
-                ? 'background:#FDC018; color:#3D1F0D; font-size:11px; padding:4px 8px; border-radius:8px; display:inline-block; max-width:200px'
-                : 'background:#3D1F0D; color:#FDF6E3; font-size:11px; padding:4px 8px; border-radius:8px; display:inline-block; max-width:200px'">
-                {{ msg.content }}
-              </span>
-            </div>
-            <div v-if="chatLoading" class="text-left">
-              <span style="background:#3D1F0D; color:#FDC018; font-size:11px; padding:4px 8px; border-radius:8px; display:inline-block">
-                Wormy is thinking...
-              </span>
+            <div class="stat-row">
+              <span class="stat-icon">♥</span>
+              <div class="stat-track"><div class="stat-fill heart" style="width:70%"></div></div>
+              <span class="stat-pct">70%</span>
             </div>
           </div>
-          <div class="flex gap-2">
-            <input v-model="chatInput"
-              @keyup.enter="sendMessage"
-              type="text"
-              placeholder="Ask about your plant..."
-              class="flex-1 px-3 py-2 text-xs rounded-lg" style="border: 1px solid #8E2605; background: #5F3924; color: #FDF6E3" />
-            <button @click="sendMessage"
-              class="text-xs font-bold px-3 py-2 rounded-lg cursor-pointer" style="background: #FDC018; color: #3D1F0D">
-              Send
+          <div class="card-info">
+            <div class="info-cell">
+              <span class="info-label">Last watered</span>
+              <span class="info-val">{{ timeAgo(selected.last_watered) }}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">Water every</span>
+              <span class="info-val" style="color: #628A81;">{{ selected.water_frequency_days ? selected.water_frequency_days + 'd' : '—' }}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">Last scan</span>
+              <span class="info-val">{{ selected.score ? selected.score + '/100' : 'never' }}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">Status</span>
+              <span class="info-val" :style="{ color: getStatusColor(computedStatus(selected)) }">{{ getStatusLabel(computedStatus(selected)) }}</span>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="card-btn water" @click="logWatering">💧 Log Watering</button>
+            <input ref="fileInput" type="file" accept="image/*" style="display:none" @change="handlePhotoSelect" />
+            <div v-if="photoPreview" class="photo-preview"><img :src="photoPreview" /></div>
+            <button class="card-btn scan" @click="photoPreview ? scanPlant() : fileInput.click()" :disabled="scanLoading">
+              <span v-if="scanLoading">🔍 Scanning...</span>
+              <span v-else-if="photoPreview">🔍 Scan This Photo</span>
+              <span v-else>📷 Upload for Scan</span>
             </button>
+            <button class="card-btn wormy" @click="chatOpen = !chatOpen">🐛 Ask Wormy</button>
+          </div>
+          <div v-if="scanResult" class="scan-result">
+            <div class="scan-header">
+              <span style="font-size:1.3rem">{{ scanResult.emoji }}</span>
+              <span class="scan-score">{{ scanResult.score }}/100</span>
+            </div>
+            <p class="scan-summary">{{ scanResult.summary }}</p>
+            <ul class="scan-issues">
+              <li v-for="issue in scanResult.issues" :key="issue">⚠️ {{ issue }}</li>
+            </ul>
+            <p class="scan-advice">💡 {{ scanResult.advice }}</p>
+            <p class="scan-fun">🌿 {{ scanResult.extraFun }}</p>
+          </div>
+        </div>
+
+        <!-- RIGHT: ROSTER LIST -->
+        <div class="gt-roster-list">
+          <div class="roster-header">
+            <span>Plant</span>
+            <span>Status</span>
+            <span>Score</span>
+            <span>Location</span>
+            <span>Updated</span>
+          </div>
+          <div v-for="plant in plants" :key="plant.id"
+            class="roster-row"
+            :class="{ selected: selected?.id === plant.id }"
+            @click="selectPlant(plant)">
+            <div class="row-plant">
+              <span class="row-emoji">{{ plant.emoji }}</span>
+              <div>
+                <p class="row-name">{{ plant.name }}</p>
+                <p class="row-species">{{ plant.species }}</p>
+              </div>
+            </div>
+            <div>
+              <span class="row-status" :style="{ background: getStatusColor(computedStatus(plant)) }">
+                {{ getStatusLabel(computedStatus(plant)) }}
+              </span>
+            </div>
+            <span class="row-score">{{ plant.score || '—' }}</span>
+            <span class="row-location">{{ plant.location }}</span>
+            <span class="row-updated">{{ timeAgo(plant.last_watered) }}</span>
+          </div>
+          <div class="roster-add" @click="showForm = !showForm">+ add a plant</div>
+          <div v-if="showForm" class="add-form">
+            <p class="form-title">New Plant</p>
+            <div style="position:relative; margin-bottom:10px;">
+              <input v-model="speciesSearch" @input="searchSpecies(speciesSearch)" type="text" placeholder="Search species..." class="form-input" />
+              <div v-if="showSuggestions" class="suggestions">
+                <div v-for="s in speciesSuggestions" :key="s.id" @click="selectSpecies(s)" class="suggestion-item">
+                  <p style="font-weight:bold;">{{ s.common_name }}</p>
+                  <p style="color:#FDC018; font-size:0.75rem;">{{ s.scientific_name }}</p>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:70px 1fr; gap:10px; margin-bottom:10px;">
+              <input v-model="newEmoji" type="text" placeholder="🌱" maxlength="2" class="form-input" style="text-align:center; font-size:1.4rem; padding:8px;" />
+              <select v-model="newPlantType" class="form-input">
+                <option v-for="(cfg, key) in plantTypes" :key="key" :value="key">{{ cfg.label }}</option>
+              </select>
+            </div>
+            <input v-model="newName" type="text" placeholder="Name" class="form-input" style="margin-bottom:10px;" />
+            <input v-model="newSpecies" type="text" placeholder="Species" class="form-input" style="margin-bottom:10px;" />
+            <input v-model="newLocation" type="text" placeholder="Location" class="form-input" style="margin-bottom:14px;" />
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <button @click="addPlant" class="form-btn save">Save</button>
+              <button @click="showForm = false" class="form-btn cancel">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT: ROSTER LIST -->
-      <div class="flex-1 flex flex-col" style="background: rgba(61, 31, 13, 0.85)">
-        <div class="px-4 py-2 grid grid-cols-3 text-xs font-bold uppercase tracking-widest border-b-2" style="background: #5F3924; color: #FDC018; border-color: #8E2605">
-          <span>Plant</span>
-          <span class="text-center">Status</span>
-          <span class="text-right">Score</span>
+      <!-- GARDEN VIEW -->
+      <div v-if="currentView === 'garden'" class="gt-garden-layout">
+        <div class="garden-toolbar">
+          <button class="rock-btn" @click="showForm = !showForm">+ Add Plant</button>
+          <button class="rock-btn">↕ Re-arrange</button>
         </div>
-        <div v-for="plant in plants" :key="plant.id"
-          @click="selected = plant"
-          class="px-4 py-3 border-b grid grid-cols-3 items-center cursor-pointer"
-          :style="{
-            borderColor: '#8E2605',
-            background: selected.id === plant.id ? '#5F3924' : 'transparent',
-            borderLeft: selected.id === plant.id ? '4px solid #FDC018' : '4px solid transparent'
-          }">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">{{ plant.emoji }}</span>
-            <div>
-              <p class="font-bold text-sm" style="color: #FDF6E3">{{ plant.name }}</p>
-              <p class="text-xs" style="color: #FDC018">{{ plant.location }}</p>
+        <div class="garden-grid">
+          <div v-for="plant in plants" :key="plant.id"
+            class="garden-pot"
+            :class="{ 'pot-active': selected?.id === plant.id }"
+            @click="selected = plant; modalOpen = true">
+            <div class="pot-art">
+              <span class="pot-emoji">{{ plant.emoji }}</span>
+              <span class="pot-base">🪴</span>
+            </div>
+            <p class="pot-name">{{ plant.name }}</p>
+            <span class="pot-status" :style="{ background: getStatusColor(computedStatus(plant)) }">{{ getStatusLabel(computedStatus(plant)) }}</span>
+            <div class="pot-bar-track"><div class="pot-bar-fill" :style="{ width: waterHealth(plant) + '%' }"></div></div>
+            <div v-if="computedStatus(plant) !== 'happy' && computedStatus(plant) !== 'good'" class="pot-bubble">
+              {{ getStatusLabel(computedStatus(plant)) }}
             </div>
           </div>
-          <div class="flex justify-center">
-            <span class="text-xs font-bold px-2 py-1 rounded-full uppercase"
-              :style="{ background: statusBg(computedStatus(plant)), color: '#FDF6E3' }">
-              {{ computedStatus(plant) }}
-            </span>
+          <div v-for="n in Math.max(0, 8 - plants.length)" :key="'e'+n" class="garden-pot empty">
+            <span style="color:#FDC018; font-size:1.5rem; opacity:0.4">+</span>
           </div>
-          <p class="text-right font-bold" style="color: #FDF6E3">{{ plant.score }}</p>
         </div>
-
-        <div @click="showForm = true"
-          class="mt-auto p-4 text-center text-xs font-bold uppercase tracking-widest border-t-2 border-dashed cursor-pointer"
-          style="border-color: #8E2605; color: #FDC018; background: #5F3924">
-          + add a plant
-        </div>
-
-        <!-- ADD PLANT FORM -->
-        <div v-if="showForm" class="p-4 border-t-2" style="background: #5F3924; border-color: #8E2605">
-          <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color: #FDC018">New plant</p>
-
-          <div class="relative mb-2">
-            <input
-              v-model="speciesSearch"
-              @input="searchSpecies(speciesSearch)"
-              type="text"
-              placeholder="Search for a plant..."
-              class="w-full px-3 py-2 text-sm rounded-lg border" style="border-color: #8E2605; background: #3D1F0D; color: #FDF6E3" />
-            <div v-if="showSuggestions"
-              class="absolute w-full rounded-lg shadow-lg z-10 mt-1 overflow-hidden"
-              style="background: #3D1F0D; border: 1px solid #8E2605">
-              <div v-for="suggestion in speciesSuggestions" :key="suggestion.id"
-                @click="selectSpecies(suggestion)"
-                class="px-3 py-2 cursor-pointer text-sm"
-                style="color: #FDF6E3; border-bottom: 1px solid #5F3924">
-                <p class="font-bold">{{ suggestion.common_name }}</p>
-                <p class="text-xs" style="color: #FDC018">{{ suggestion.scientific_name }}</p>
+        <div v-if="showForm" class="add-form garden-add-form">
+          <p class="form-title">New Plant</p>
+          <div style="position:relative; margin-bottom:10px;">
+            <input v-model="speciesSearch" @input="searchSpecies(speciesSearch)" type="text" placeholder="Search species..." class="form-input" />
+            <div v-if="showSuggestions" class="suggestions">
+              <div v-for="s in speciesSuggestions" :key="s.id" @click="selectSpecies(s)" class="suggestion-item">
+                <p style="font-weight:bold;">{{ s.common_name }}</p>
+                <p style="color:#FDC018; font-size:0.75rem;">{{ s.scientific_name }}</p>
               </div>
             </div>
           </div>
-
-          <input v-model="newName" type="text" placeholder="Name"
-            class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #8E2605; background: #3D1F0D; color: #FDF6E3" />
-          <input v-model="newSpecies" type="text" placeholder="Species"
-            class="w-full mb-2 px-3 py-2 text-sm rounded-lg border" style="border-color: #8E2605; background: #3D1F0D; color: #FDF6E3" />
-          <input v-model="newLocation" type="text" placeholder="Location (e.g. Herb · patio)"
-            class="w-full mb-3 px-3 py-2 text-sm rounded-lg border" style="border-color: #8E2605; background: #3D1F0D; color: #FDF6E3" />
-          <div class="flex gap-2">
-            <button @click="addPlant"
-              class="flex-1 text-xs font-bold uppercase py-2 rounded-lg cursor-pointer" style="background: #E54B1F; color: #FDF6E3">
-              Save
-            </button>
-            <button @click="showForm = false"
-              class="flex-1 text-xs font-bold uppercase py-2 rounded-lg cursor-pointer" style="background: #5F3924; color: #FDF6E3; border: 1px solid #8E2605">
-              Cancel
-            </button>
+          <div style="display:grid; grid-template-columns:70px 1fr; gap:10px; margin-bottom:10px;">
+            <input v-model="newEmoji" type="text" placeholder="🌱" maxlength="2" class="form-input" style="text-align:center; font-size:1.4rem; padding:8px;" />
+            <select v-model="newPlantType" class="form-input">
+              <option v-for="(cfg, key) in plantTypes" :key="key" :value="key">{{ cfg.label }}</option>
+            </select>
+          </div>
+          <input v-model="newName" type="text" placeholder="Name" class="form-input" style="margin-bottom:10px;" />
+          <input v-model="newSpecies" type="text" placeholder="Species" class="form-input" style="margin-bottom:10px;" />
+          <input v-model="newLocation" type="text" placeholder="Location" class="form-input" style="margin-bottom:14px;" />
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <button @click="addPlant" class="form-btn save">Save</button>
+            <button @click="showForm = false" class="form-btn cancel">Cancel</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- GARDEN VIEW -->
-    <div v-if="currentView === 'garden'" class="flex-1 p-6" style="background: rgba(61, 31, 13, 0.75)">
-      <div class="grid grid-cols-4 gap-4">
-        <div v-for="plant in plants" :key="plant.id"
-          @click="selected = plant; modalOpen = true"
-          class="rounded-xl p-4 flex flex-col items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
-          style="background: #3D1F0D">
-          <div class="text-5xl">{{ plant.emoji }}</div>
-          <p class="text-sm font-bold text-center" style="color: #FDC018">{{ plant.name }}</p>
-          <span class="text-xs font-bold px-2 py-1 rounded-full"
-            :style="{ background: statusBg(computedStatus(plant)), color: '#FDF6E3' }">
-              {{ computedStatus(plant) }}
-          </span>
-          <div class="w-full flex flex-col gap-1">
-            <div class="w-full rounded-full h-1" style="background: #5F3924">
-              <div class="h-1 rounded-full" :style="{ width: waterHealth(plant) + '%', background: '#628A81' }"></div>
-            </div>
-            <div class="w-full rounded-full h-1" style="background: #5F3924">
-              <div class="h-1 rounded-full" style="width:90%; background: #FDC018"></div>
-            </div>
-            <div class="w-full rounded-full h-1" style="background: #5F3924">
-              <div class="h-1 rounded-full" style="width:70%; background: #E54B1F"></div>
+    <!-- GARDEN PROFILE MODAL -->
+    <div v-if="modalOpen && selected && currentView === 'garden'" class="modal-overlay" @click.self="modalOpen = false">
+      <div class="modal-inner">
+        <button class="modal-close" @click="modalOpen = false">✕ close</button>
+        <div class="modal-nav">
+          <button class="nav-btn" @click="navigateGarden('north')">↑</button>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <button class="nav-btn" @click="navigateGarden('west')">←</button>
+            <span class="nav-name">{{ selected.name }}</span>
+            <button class="nav-btn" @click="navigateGarden('east')">→</button>
+          </div>
+          <button class="nav-btn" @click="navigateGarden('south')">↓</button>
+        </div>
+        <div class="gt-profile-card modal-card">
+          <div class="card-band" :style="{ background: typeConfig(selected.plant_type).color }">
+            <span class="band-label">{{ typeConfig(selected.plant_type).label }}</span>
+            <span class="band-id">#{{ String(selected.id).padStart(3, '0') }}</span>
+          </div>
+          <div class="card-art">
+            <img v-if="selected.photo_url" :src="selected.photo_url" class="card-photo" />
+            <span v-else class="card-emoji">{{ selected.emoji }}</span>
+          </div>
+          <div class="card-name-block">
+            <h2 class="card-name">{{ selected.name }}</h2>
+            <p class="card-scientific">{{ selected.species }}</p>
+            <p class="card-meta">📍 {{ selected.location }}</p>
+          </div>
+          <div class="card-hp">
+            <span class="hp-label">HP</span>
+            <span v-for="i in 5" :key="i" class="hp-heart" :class="{ filled: i <= hpHearts(selected.score) }">♥</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-row">
+              <span class="stat-icon">💧</span>
+              <div class="stat-track"><div class="stat-fill water" :style="{ width: waterHealth(selected) + '%' }"></div></div>
+              <span class="stat-pct">{{ waterHealth(selected) }}%</span>
             </div>
           </div>
-        </div>
-
-        <!-- EMPTY SLOTS -->
-        <div v-for="n in Math.max(0, 8 - plants.length)" :key="'empty-' + n"
-          class="rounded-xl p-4 flex items-center justify-center cursor-pointer"
-          style="background: #3D1F0D; opacity: 0.4; min-height: 160px">
-          <span style="color: #FDC018; font-size: 24px">+</span>
+          <div class="card-info">
+            <div class="info-cell">
+              <span class="info-label">Last watered</span>
+              <span class="info-val">{{ timeAgo(selected.last_watered) }}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">Last scan</span>
+              <span class="info-val">{{ selected.score ? selected.score + '/100' : 'never' }}</span>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="card-btn water" @click="logWatering">💧 Log Watering</button>
+            <button class="card-btn wormy" @click="chatOpen = true; modalOpen = false; currentView = 'roster'">🐛 Ask Wormy</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- MODAL -->
-    <div v-if="modalOpen && selected"
-      class="fixed inset-0 flex items-center justify-center z-50"
-      style="background: rgba(0,0,0,0.7)"
-      @click.self="modalOpen = false">
-      <div class="rounded-2xl p-6 flex flex-col gap-4 w-80" style="background: #3D1F0D; border: 2px solid #8E2605">
-        <div class="flex justify-between items-start">
-          <div class="text-5xl">{{ selected.emoji }}</div>
-          <button @click="modalOpen = false" class="text-xs font-bold px-3 py-1 rounded-full" style="background: #5F3924; color: #FDC018">✕ close</button>
+    <!-- WORMY CHAT MODAL -->
+    <div v-if="chatOpen" class="modal-overlay" @click.self="chatOpen = false">
+      <div class="chat-modal">
+        <div class="chat-header">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <img :src="wormyImage" style="height:60px; width:auto;" />
+            <span class="chat-title">Wormy</span>
+          </div>
+          <button class="modal-close" style="position:static;" @click="chatOpen = false">✕</button>
         </div>
-        <div class="text-center">
-          <h2 class="text-2xl font-bold" style="color: #FDC018">{{ selected.name }}</h2>
-          <p class="text-xs uppercase tracking-widest mt-1" style="color: #FDF6E3">{{ selected.species }} · {{ selected.location }}</p>
-          <p class="text-sm font-bold uppercase mt-2" style="color: #FDF6E3">☀️ {{ selected.sunlight || 'sunlight unknown' }}</p>
+        <div class="chat-messages">
+          <div v-for="(msg, i) in chatMessages" :key="i" :class="['chat-msg', msg.role === 'user' ? 'user' : 'wormy']">
+            {{ msg.content }}
+          </div>
+          <div v-if="chatLoading" class="chat-msg wormy">Wormy is thinking...</div>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div class="rounded-lg p-2" style="background: #5F3924">
-            <p class="text-xs uppercase tracking-wide" style="color: #FDC018">Last watered</p>
-            <p class="text-sm font-bold" style="color: #FDF6E3">{{ timeAgo(selected.last_watered) }}</p>
-          </div>
-          <div class="rounded-lg p-2" style="background: #5F3924">
-            <p class="text-xs uppercase tracking-wide" style="color: #FDC018">Water every</p>
-            <p class="text-sm font-bold" style="color: #628A81">{{ selected.water_frequency_days ? selected.water_frequency_days + ' days' : 'unknown' }}</p>
-          </div>
+        <div class="chat-input-row">
+          <input v-model="chatInput" @keyup.enter="sendMessage" type="text" placeholder="Ask about your plants..." class="chat-input" />
+          <button @click="sendMessage" class="chat-send">Send</button>
         </div>
-        <div class="flex flex-col gap-2">
-          <p class="text-xs uppercase tracking-wide" style="color: #FDC018">Plant health</p>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">💧</span>
-            <div class="flex-1 rounded-full h-2" style="background: #5F3924">
-              <div class="h-2 rounded-full" :style="{ width: waterHealth(selected) + '%', background: '#628A81' }"></div>
-            </div>
-            <span class="text-xs w-8 text-right" style="color: #FDF6E3">{{ waterHealth(selected) }}%</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">☀️</span>
-            <div class="flex-1 rounded-full h-2" style="background: #5F3924">
-              <div class="h-2 rounded-full" style="width:90%; background: #FDC018"></div>
-            </div>
-            <span class="text-xs w-8 text-right" style="color: #FDF6E3">90%</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">❤️</span>
-            <div class="flex-1 rounded-full h-2" style="background: #5F3924">
-              <div class="h-2 rounded-full" style="width:70%; background: #E54B1F"></div>
-            </div>
-            <span class="text-xs w-8 text-right" style="color: #FDF6E3">70%</span>
-          </div>
-        </div>
-        <button class="text-xs font-bold uppercase tracking-widest rounded-lg py-2 w-full cursor-pointer"
-          style="background: #E54B1F; color: #FDF6E3"
-          @click="modalOpen = false; chatOpen = true; currentView = 'roster'">
-          🐛 ask wormy
-        </button>
       </div>
     </div>
 
